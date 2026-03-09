@@ -32,6 +32,7 @@ async def _run(
     top_k: int | None,
     linkedin_dir: Path,
     dedup_fields: tuple[str, ...],
+    resume_path: Path,
 ) -> None:
     scrape_cache_path = cache_dir / "scrape.jsonl"
     score_cache_path = cache_dir / "scores.jsonl"
@@ -101,8 +102,6 @@ async def _run(
         # Filter by threshold
         passing = [(j, r) for j, r in scored_rel if r >= min_relevance]
         passing.sort(key=lambda x: x[1], reverse=True)
-        if top_k is not None:
-            passing = passing[:top_k]
 
         scores = [r for _, r in scored_rel]
         print(
@@ -111,22 +110,26 @@ async def _run(
             f" (min={min(scores):.3f}, max={max(scores):.3f},"
             f" median={statistics.median(scores):.3f})"
         )
-        all_jobs = [j for j, _ in passing]
 
-        # Deduplicate by selected fields
+        # Deduplicate by selected fields (before top-k truncation)
         if dedup_fields:
-            seen: dict[tuple[str | None, ...], Job] = {}
-            for job in all_jobs:
+            seen: dict[tuple[str | None, ...], int] = {}
+            deduped: list[tuple[Job, float]] = []
+            for job, rel in passing:
                 key = tuple(getattr(job, f) for f in dedup_fields)
                 if key not in seen:
-                    seen[key] = job
-            unique_jobs = list(seen.values())
+                    seen[key] = len(deduped)
+                    deduped.append((job, rel))
             print(
-                f"{len(unique_jobs)} unique jobs after dedup"
+                f"{len(deduped)} unique jobs after dedup"
                 f" on {','.join(dedup_fields)}."
             )
-        else:
-            unique_jobs = all_jobs
+            passing = deduped
+
+        if top_k is not None:
+            passing = passing[:top_k]
+
+        unique_jobs = [j for j, _ in passing]
 
         if skip_score:
             # Write unsorted jobs
@@ -165,11 +168,12 @@ async def _run(
                 system_prompt=CANDIDATE_PROMPT,
             )
 
+        resume_text = resume_path.read_text()
         async with open_cache(recruiter_cache_path, ttl=0) as rec_cache:
             print("--- Recruiter fit scoring ---")
             rec_scores = await score_jobs(
                 unique_jobs,
-                profile_text,
+                resume_text,
                 ai,
                 model,
                 batch_size,
@@ -254,6 +258,9 @@ def run(
     linkedin_dir: Annotated[
         Path, typer.Option(help="LinkedIn data directory")
     ] = Path("linkedin"),
+    resume: Annotated[
+        Path, typer.Option(help="Path to resume for recruiter scoring")
+    ] = Path("resume.md"),
     dedup_fields: Annotated[
         str,
         typer.Option(help="Comma-separated Job fields for dedup"),
@@ -288,6 +295,7 @@ def run(
             top_k=top_k,
             linkedin_dir=linkedin_dir,
             dedup_fields=fields,
+            resume_path=resume,
         )
     )
 
