@@ -5,11 +5,11 @@ Scrape job postings from ATS platforms, score them against a candidate profile u
 ## Quick start
 
 ```bash
-# Scrape + BM25 relevance filter only (no LLM scoring)
-python -m job_scraper.main anthropic deepmind --skip-score
+# Scrape all discovered sources + BM25 relevance filter only (no LLM scoring)
+python -m job_scraper.main --skip-score
 
 # Full pipeline (requires ANTHROPIC_API_KEY)
-python -m job_scraper.main anthropic deepmind
+python -m job_scraper.main
 ```
 
 ## Architecture
@@ -23,10 +23,20 @@ Key files:
 - `job_scraper/cache.py` — JSONL append-log cache with TTL
 - `job_scraper/models.py` — Job/ScoredJob frozen dataclasses
 - `job_scraper/report.py` — HTML report (Jinja2)
-- `job_scraper/scraper/greenhouse.py` — Greenhouse boards API scraper
-- `job_scraper/scraper/http.py` — cached HTTP GET closure
+- `job_scraper/scraper/__init__.py` — `GetFn`/`ScrapeFn` types, `discover()` auto-discovery
+- `job_scraper/scraper/_http.py` — cached HTTP GET closure
+- `job_scraper/scraper/_greenhouse.py` — Greenhouse `scrape_board()` factory
+- `job_scraper/scraper/_ashby.py` — Ashby `scrape_board()` factory
+- `job_scraper/scraper/_lever.py` — Lever `scrape_board()` factory
 - `keywords.txt` — BM25 query terms (one per line, `#` comments)
 - `profile.md` — candidate profile for LLM scoring
+
+## Adding scrapers
+
+Drop a `.py` file in `job_scraper/scraper/` (name must not start with `_`). It gets auto-discovered.
+
+- **ATS board**: 3-line wrapper — `from job_scraper.scraper._greenhouse import scrape_board; scrape = scrape_board("company")`
+- **Ad-hoc**: implement `async def scrape(get: GetFn) -> AsyncIterator[Job]`
 
 ## Style
 
