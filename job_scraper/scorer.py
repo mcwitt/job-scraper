@@ -75,7 +75,8 @@ async def score_batch(
 
     response = await client.messages.create(
         model=model,
-        max_tokens=4096,
+        max_tokens=8192,
+        thinking={"type": "enabled", "budget_tokens": 4096},
         system=SYSTEM_PROMPT.format(profile=profile),
         messages=[{"role": "user", "content": user_msg}],
         output_config=OutputConfigParam(
@@ -86,9 +87,8 @@ async def score_batch(
         ),
     )
 
-    block = response.content[0]
-    assert isinstance(block, TextBlock)
-    result = json.loads(block.text)
+    text_block = next(b for b in response.content if isinstance(b, TextBlock))
+    result = json.loads(text_block.text)
     return {s["hash"]: (s["score"], s["why"]) for s in result["scores"]}
 
 
