@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from job_scraper.hash import job_hash
 from job_scraper.models import Job
-from job_scraper.scraper import GetFn
+from job_scraper.scraper._http import Http
 
 
 def _format_compensation(comp: dict) -> str | None:
@@ -17,13 +17,13 @@ def _format_compensation(comp: dict) -> str | None:
 def scrape_board(board: str):
     """Return a scrape function for an Ashby job board."""
 
-    async def scrape(get: GetFn) -> AsyncIterator[Job]:
+    async def scrape(http: Http) -> AsyncIterator[Job]:
         now = datetime.now(timezone.utc).isoformat()
         url = (
             f"https://api.ashbyhq.com/posting-api/job-board/"
             f"{board}?includeCompensation=true"
         )
-        body = await get(url)
+        body = await http.get(url)
         data = json.loads(body)
         for posting in data.get("jobs", []):
             title = posting.get("title", "")

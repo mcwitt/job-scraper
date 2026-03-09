@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup
 
 from job_scraper.hash import job_hash
 from job_scraper.models import Job
-from job_scraper.scraper import GetFn
+from job_scraper.scraper._http import Http
 
 
 def _html_to_text(raw: str) -> str:
@@ -19,10 +19,10 @@ def _html_to_text(raw: str) -> str:
 def scrape_board(token: str):
     """Return a scrape function for a Greenhouse board."""
 
-    async def scrape(get: GetFn) -> AsyncIterator[Job]:
+    async def scrape(http: Http) -> AsyncIterator[Job]:
         now = datetime.now(timezone.utc).isoformat()
         url = f"https://boards-api.greenhouse.io/v1/boards/{token}/jobs?content=true"
-        body = await get(url)
+        body = await http.get(url)
         data = json.loads(body)
         for posting in data.get("jobs", []):
             title = posting.get("title", "")

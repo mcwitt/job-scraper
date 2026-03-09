@@ -1,12 +1,11 @@
 import importlib
-from collections.abc import AsyncIterator, Callable, Coroutine
+from collections.abc import AsyncIterator, Callable
 from pathlib import Path
-from typing import Any
 
 from job_scraper.models import Job
+from job_scraper.scraper._http import Http
 
-type GetFn = Callable[[str], Coroutine[Any, Any, str]]
-type ScrapeFn = Callable[[GetFn], AsyncIterator[Job]]
+type ScrapeFn = Callable[[Http], AsyncIterator[Job]]
 
 
 def discover() -> list[tuple[str, ScrapeFn]]:
