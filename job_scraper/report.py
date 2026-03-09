@@ -2,6 +2,7 @@ from pathlib import Path
 
 from jinja2 import Environment
 
+from job_scraper.linkedin import Connection, LookupFn, SecondDegree
 from job_scraper.models import ScoredJob
 
 TEMPLATE = """\
@@ -30,6 +31,8 @@ TEMPLATE = """\
   .score-mid { background: #fff3cd; color: #856404; }
   .score-low { background: #f8d7da; color: #721c24; }
   .why { max-width: 300px; font-size: 0.9em; color: #555; }
+  .conns { font-size: 0.82em; max-width: 200px; }
+  .conns a { color: #0066cc; }
   .meta { font-size: 0.85em; color: #777; }
 </style>
 </head>
@@ -42,6 +45,8 @@ TEMPLATE = """\
       <th>Score</th>
       <th>Title</th>
       <th>Company</th>
+      <th>1st</th>
+      <th>2nd</th>
       <th>Team</th>
       <th>Location</th>
       <th>Why</th>
@@ -50,10 +55,26 @@ TEMPLATE = """\
   <tbody>
     {% for job in jobs %}
     {% set pct = (job.score * 100) | round(0) | int %}
+    {% set first, second = lookup(job.company) %}
     <tr>
       <td><span class="score {{ score_class(job.score) }}">{{ pct }}</span></td>
       <td><a href="{{ job.url }}">{{ job.title }}</a></td>
       <td>{{ job.company }}</td>
+      <td class="conns">
+        {%- for c in first -%}
+        <a href="{{ c.url }}">{{ c.name }}</a>
+        {{- ", " if not loop.last -}}
+        {%- endfor -%}
+      </td>
+      <td class="conns">
+        {%- for g in second -%}
+        <a href="{{ g.via.url }}">{{ g.via.name }}</a>:
+        {%- for c in g.connections %} <a href="{{ c.url }}">{{ c.name }}</a>
+        {{- ", " if not loop.last -}}
+        {%- endfor -%}
+        {{ "<br>" if not loop.last }}
+        {%- endfor -%}
+      </td>
       <td>{{ job.team or "" }}</td>
       <td>{{ job.location or "" }}</td>
       <td class="why">{{ job.why }}</td>
@@ -74,9 +95,21 @@ def _score_class(score: float) -> str:
     return "score-low"
 
 
-def render_report(jobs: list[ScoredJob], path: Path) -> None:
+def _no_connections(company: str) -> tuple[list[Connection], list[SecondDegree]]:
+    return [], []
+
+
+def render_report(
+    jobs: list[ScoredJob],
+    path: Path,
+    lookup: LookupFn | None = None,
+) -> None:
     env = Environment(autoescape=True)
     template = env.from_string(TEMPLATE)
-    html = template.render(jobs=jobs, score_class=_score_class)
+    html = template.render(
+        jobs=jobs,
+        score_class=_score_class,
+        lookup=lookup or _no_connections,
+    )
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(html)
