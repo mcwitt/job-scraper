@@ -49,7 +49,7 @@ TEMPLATE = """\
   .cell { max-width: 300px; overflow: hidden; text-overflow: ellipsis;
     white-space: nowrap; cursor: default; }
   .cell.expanded { white-space: normal; overflow: visible; }
-  .conns { font-size: 0.82em; max-width: 100px; }
+  .conns { text-align: center; }
   .conns a { color: #0066cc; }
   .date { white-space: nowrap; font-size: 0.85em; }
   .age-fresh { font-weight: 700; padding: 0.25rem 0.5rem;
@@ -64,7 +64,7 @@ TEMPLATE = """\
   <thead>
     <tr>
       <th title="Product of Candidate and Recruiter scores">Priority</th>
-      <th>Posted</th>
+      <th data-sort-desc>Posted</th>
       <th>Title</th>
       <th>Company</th>
       <th title="1st-degree LinkedIn connections at this company">1st</th>
@@ -92,27 +92,39 @@ TEMPLATE = """\
           {% endif %}
         </dl>
       </td>
-      <td class="date" data-sort="{{ job.posted or '' }}">{% if job.posted %}
+      <td class="date" data-sort="{{ epoch(job.posted) }}">{% if job.posted %}
         <span class="age {{ date_class(job.posted) }}"
           title="{{ job.posted }}">
           {{- time_ago(job.posted) -}}
         </span>{% endif %}</td>
       <td class="cell"><a href="{{ job.url }}">{{ job.title }}</a></td>
       <td class="cell">{{ job.company }}</td>
-      <td class="conns cell">
-        {%- for c in first -%}
-        <a href="{{ c.url }}">{{ c.name }}</a>
-        {{- ", " if not loop.last -}}
-        {%- endfor -%}
+      <td class="conns tip" data-sort="{{ first | length }}">
+        {{- first | length or "" -}}
+        {%- if first %}
+        <div class="tip-body">
+        {%- for c in first %}
+          <a href="{{ c.url }}">{{ c.name }}</a>
+          {{- ", " if not loop.last -}}
+        {%- endfor %}
+        </div>
+        {%- endif %}
       </td>
-      <td class="conns cell">
-        {%- for g in second -%}
-        <a href="{{ g.via.url }}">{{ g.via.name }}</a>:
-        {%- for c in g.connections %} <a href="{{ c.url }}">{{ c.name }}</a>
-        {{- ", " if not loop.last -}}
-        {%- endfor -%}
-        {{ "<br>" if not loop.last }}
-        {%- endfor -%}
+      {% set n2 = second | map(attribute='connections') | map('length') | sum %}
+      <td class="conns tip" data-sort="{{ n2 }}">
+        {{- n2 or "" -}}
+        {%- if second %}
+        <div class="tip-body">
+        {%- for g in second %}
+          <a href="{{ g.via.url }}">{{ g.via.name }}</a>:
+          {%- for c in g.connections %}
+          <a href="{{ c.url }}">{{ c.name }}</a>
+          {{- ", " if not loop.last -}}
+          {%- endfor %}
+          {{ "<br>" if not loop.last }}
+        {%- endfor %}
+        </div>
+        {%- endif %}
       </td>
       <td class="cell">{{ job.team or "" }}</td>
       <td class="cell">{{ job.location or "" }}</td>
@@ -145,7 +157,10 @@ document.addEventListener('click', function() {
   var ths = thead.querySelectorAll('th');
   ths.forEach(function(th, col) {
     th.addEventListener('click', function() {
-      var asc = !th.classList.contains('sort-asc');
+      var desc = th.hasAttribute('data-sort-desc');
+      var asc = desc
+        ? th.classList.contains('sort-desc')
+        : !th.classList.contains('sort-asc');
       ths.forEach(function(h) { h.classList.remove('sort-asc', 'sort-desc'); });
       th.classList.add(asc ? 'sort-asc' : 'sort-desc');
       var rows = Array.from(tbody.querySelectorAll('tr'));
@@ -215,6 +230,18 @@ def _date_class(date_str: str | None) -> str:
     return ""
 
 
+def _epoch(date_str: str | None) -> int:
+    if not date_str:
+        return 0
+    try:
+        dt = datetime.fromisoformat(date_str).replace(
+            tzinfo=timezone.utc
+        )
+        return int(dt.timestamp())
+    except ValueError:
+        return 0
+
+
 def _score_class(score: float) -> str:
     if score >= 0.7:
         return "score-high"
@@ -239,6 +266,7 @@ def render_report(
         score_class=_score_class,
         date_class=_date_class,
         time_ago=_time_ago,
+        epoch=_epoch,
         lookup=lookup or _no_connections,
     )
     path.parent.mkdir(parents=True, exist_ok=True)
