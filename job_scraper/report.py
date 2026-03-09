@@ -21,8 +21,11 @@ TEMPLATE = """\
     border-radius: 8px; overflow: hidden;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
   th, td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid #eee; }
-  th { background: #fafafa; font-weight: 600; position: sticky; top: 0; }
-  th[title] { cursor: help; }
+  th { background: #fafafa; font-weight: 600; position: sticky; top: 0;
+    cursor: pointer; user-select: none; white-space: nowrap; }
+  th::after { content: ""; display: inline-block; width: 0.6em; margin-left: 0.3em; }
+  th.sort-asc::after { content: "\\25B2"; font-size: 0.6em; vertical-align: middle; }
+  th.sort-desc::after { content: "\\25BC"; font-size: 0.6em; vertical-align: middle; }
   tr:hover { background: #f9f9f9; }
   a { color: #0066cc; text-decoration: none; }
   a:hover { text-decoration: underline; }
@@ -77,7 +80,7 @@ TEMPLATE = """\
     {% set pri = cv * rv %}
     {% set first, second = lookup(job.company) %}
     <tr>
-      <td class="tip">
+      <td class="tip" data-sort="{{ pri }}">
         <span class="score {{ score_class(pri) }}"
           >{{ (pri * 100) | round(0) | int }}</span>
         <dl class="tip-body">
@@ -89,8 +92,9 @@ TEMPLATE = """\
           {% endif %}
         </dl>
       </td>
-      <td class="date">{% if job.posted %}
-        <span class="age {{ date_class(job.posted) }}">
+      <td class="date" data-sort="{{ job.posted or '' }}">{% if job.posted %}
+        <span class="age {{ date_class(job.posted) }}"
+          title="{{ job.posted }}">
           {{- time_ago(job.posted) -}}
         </span>{% endif %}</td>
       <td class="cell"><a href="{{ job.url }}">{{ job.title }}</a></td>
@@ -134,6 +138,31 @@ document.addEventListener('click', function() {
     t.classList.remove('active');
   });
 });
+(function() {
+  var table = document.querySelector('table');
+  var thead = table.querySelector('thead');
+  var tbody = table.querySelector('tbody');
+  var ths = thead.querySelectorAll('th');
+  ths.forEach(function(th, col) {
+    th.addEventListener('click', function() {
+      var asc = !th.classList.contains('sort-asc');
+      ths.forEach(function(h) { h.classList.remove('sort-asc', 'sort-desc'); });
+      th.classList.add(asc ? 'sort-asc' : 'sort-desc');
+      var rows = Array.from(tbody.querySelectorAll('tr'));
+      rows.sort(function(a, b) {
+        var ac = a.children[col], bc = b.children[col];
+        var av = ac.dataset.sort != null
+          ? ac.dataset.sort : ac.textContent.trim();
+        var bv = bc.dataset.sort != null
+          ? bc.dataset.sort : bc.textContent.trim();
+        var an = parseFloat(av), bn = parseFloat(bv);
+        var cmp = (!isNaN(an) && !isNaN(bn)) ? an - bn : av.localeCompare(bv);
+        return asc ? cmp : -cmp;
+      });
+      rows.forEach(function(r) { tbody.appendChild(r); });
+    });
+  });
+})();
 </script>
 </body>
 </html>

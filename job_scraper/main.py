@@ -1,4 +1,5 @@
 import asyncio
+import dataclasses
 import json
 import statistics
 from pathlib import Path
@@ -30,6 +31,7 @@ async def _run(
     min_relevance: float,
     top_k: int | None,
     linkedin_dir: Path,
+    dedup_fields: tuple[str, ...],
 ) -> None:
     scrape_cache_path = cache_dir / "scrape.jsonl"
     score_cache_path = cache_dir / "scores.jsonl"
@@ -111,13 +113,20 @@ async def _run(
         )
         all_jobs = [j for j, _ in passing]
 
-        # Deduplicate by hash
-        seen: dict[str, Job] = {}
-        for job in all_jobs:
-            if job.hash not in seen:
-                seen[job.hash] = job
-        unique_jobs = list(seen.values())
-        print(f"{len(unique_jobs)} unique jobs after dedup.")
+        # Deduplicate by selected fields
+        if dedup_fields:
+            seen: dict[tuple[str | None, ...], Job] = {}
+            for job in all_jobs:
+                key = tuple(getattr(job, f) for f in dedup_fields)
+                if key not in seen:
+                    seen[key] = job
+            unique_jobs = list(seen.values())
+            print(
+                f"{len(unique_jobs)} unique jobs after dedup"
+                f" on {','.join(dedup_fields)}."
+            )
+        else:
+            unique_jobs = all_jobs
 
         if skip_score:
             # Write unsorted jobs
@@ -245,8 +254,24 @@ def run(
     linkedin_dir: Annotated[
         Path, typer.Option(help="LinkedIn data directory")
     ] = Path("linkedin"),
+    dedup_fields: Annotated[
+        str,
+        typer.Option(help="Comma-separated Job fields for dedup"),
+    ] = "title,company,team",
 ) -> None:
     """Scrape and score job postings."""
+    if dedup_fields:
+        fields: tuple[str, ...] = tuple(
+            f.strip() for f in dedup_fields.split(",")
+        )
+        job_attrs = {f.name for f in dataclasses.fields(Job)}
+        bad = [f for f in fields if f not in job_attrs]
+        if bad:
+            raise typer.BadParameter(
+                f"Unknown Job fields: {', '.join(bad)}"
+            )
+    else:
+        fields = ()
     asyncio.run(
         _run(
             cache_dir=cache_dir,
@@ -262,6 +287,7 @@ def run(
             min_relevance=min_relevance,
             top_k=top_k,
             linkedin_dir=linkedin_dir,
+            dedup_fields=fields,
         )
     )
 
