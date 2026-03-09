@@ -34,7 +34,7 @@ class ScoredJob:
     description: str
     source: str
     scraped_at: str
-    score: int
+    score: float
     why: str
     team: str | None = None
     posted: str | None = None
@@ -50,5 +50,5 @@ class ScoredJob:
         return cls(**{k: v for k, v in d.items() if k in valid})
 
 
-def scored_job(job: Job, score: int, why: str) -> ScoredJob:
+def scored_job(job: Job, score: float, why: str) -> ScoredJob:
     return ScoredJob(**job.to_dict(), score=score, why=why)

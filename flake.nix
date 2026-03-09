@@ -23,6 +23,7 @@
             httpx
             jinja2
             lxml
+            rank-bm25
             typer
           ]
         );

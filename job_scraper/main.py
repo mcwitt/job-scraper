@@ -1,5 +1,6 @@
 import asyncio
 import json
+import statistics
 from pathlib import Path
 from typing import Annotated
 
@@ -8,16 +9,11 @@ import typer
 
 from job_scraper.cache import open_cache
 from job_scraper.models import Job
+from job_scraper.relevance import score_relevance
 from job_scraper.scraper.greenhouse import scrape as greenhouse_scrape
 from job_scraper.scraper.http import make_get
 
 app = typer.Typer()
-
-
-def _matches_keywords(job: Job, keywords: list[str]) -> bool:
-    """Check if a job's title or description matches any keyword (case-insensitive)."""
-    text = f"{job.title}\n{job.description}".lower()
-    return any(kw in text for kw in keywords)
 
 
 async def _run(
@@ -31,7 +27,9 @@ async def _run(
     max_concurrent: int,
     skip_score: bool,
     report: bool,
-    keywords: list[str],
+    keywords_path: Path,
+    min_relevance: float,
+    top_k: int | None,
 ) -> None:
     scrape_cache_path = cache_dir / "scrape.jsonl"
     score_cache_path = cache_dir / "scores.jsonl"
@@ -69,15 +67,38 @@ async def _run(
                 f.write(json.dumps(job.to_dict()) + "\n")
         print(f"Wrote {len(all_jobs)} raw jobs to {raw_path}")
 
-        # Filter by keywords
-        if keywords:
-            normalized = [kw.lower() for kw in keywords]
-            filtered = [j for j in all_jobs if _matches_keywords(j, normalized)]
-            print(
-                f"Scraped {len(all_jobs)} jobs, "
-                f"{len(filtered)} match keywords {keywords}."
-            )
-            all_jobs = filtered
+        # BM25 relevance scoring
+        kw_lines = keywords_path.read_text().splitlines()
+        keywords = [
+            ln.strip()
+            for ln in kw_lines
+            if ln.strip() and not ln.strip().startswith("#")
+        ]
+        scored_rel = score_relevance(keywords, all_jobs)
+
+        # Write all jobs with relevance (observability)
+        rel_path = output_dir / "jobs_relevance.jsonl"
+        with rel_path.open("w") as f:
+            for job, rel in scored_rel:
+                d = job.to_dict()
+                d["relevance"] = round(rel, 4)
+                f.write(json.dumps(d) + "\n")
+        print(f"Wrote {len(scored_rel)} jobs with relevance to {rel_path}")
+
+        # Filter by threshold
+        passing = [(j, r) for j, r in scored_rel if r >= min_relevance]
+        passing.sort(key=lambda x: x[1], reverse=True)
+        if top_k is not None:
+            passing = passing[:top_k]
+
+        scores = [r for _, r in scored_rel]
+        print(
+            f"Relevance: {len(all_jobs)} total, "
+            f"{len(passing)} pass >= {min_relevance}"
+            f" (min={min(scores):.3f}, max={max(scores):.3f},"
+            f" median={statistics.median(scores):.3f})"
+        )
+        all_jobs = [j for j, _ in passing]
 
         # Deduplicate by hash
         seen: dict[str, Job] = {}
@@ -144,7 +165,7 @@ def run(
     ] = "claude-haiku-4-5-20251001",
     profile: Annotated[
         Path, typer.Option(help="Path to candidate profile")
-    ] = Path("profile.txt"),
+    ] = Path("profile.md"),
     max_concurrent: Annotated[
         int, typer.Option(help="Max concurrent HTTP requests")
     ] = 5,
@@ -155,15 +176,14 @@ def run(
         bool, typer.Option("--report", help="Generate HTML report")
     ] = False,
     keywords: Annotated[
-        list[str],
-        typer.Option("--keyword", "-k", help="Filter job titles by keyword"),
-    ] = [
-        "software engineer",
-        "scientist",
-        "machine learning engineer",
-        "ai engineer",
-        "data scientist",
-    ],
+        Path, typer.Option(help="Path to keywords file")
+    ] = Path("keywords.txt"),
+    min_relevance: Annotated[
+        float, typer.Option(help="Min BM25 relevance score (0-1)")
+    ] = 0.1,
+    top_k: Annotated[
+        int | None, typer.Option(help="Keep at most K jobs by relevance")
+    ] = 100,
 ) -> None:
     """Scrape and score job postings from Greenhouse boards."""
     asyncio.run(
@@ -178,7 +198,9 @@ def run(
             max_concurrent=max_concurrent,
             skip_score=skip_score,
             report=report,
-            keywords=keywords,
+            keywords_path=keywords,
+            min_relevance=min_relevance,
+            top_k=top_k,
         )
     )
 

@@ -15,11 +15,11 @@ SYSTEM_PROMPT = """\
 You are a job-matching assistant. Score each job posting
 against the candidate profile below.
 
-For each job, return a score from 0-100 and a brief justification.
-- 90-100: Exceptional match — strong alignment on skills, interests, and preferences
-- 70-89: Good match — mostly aligned, minor gaps
-- 40-69: Partial match — some relevant aspects but significant mismatches
-- 0-39: Poor match — does not align with the candidate's profile
+For each job, return a score from 0.0-1.0 and a brief justification.
+- 0.9-1.0: Exceptional match — strong alignment on skills, interests, and preferences
+- 0.7-0.89: Good match — mostly aligned, minor gaps
+- 0.4-0.69: Partial match — some relevant aspects but significant mismatches
+- 0.0-0.39: Poor match — does not align with the candidate's profile
 
 ## Candidate Profile
 
@@ -35,7 +35,7 @@ RESPONSE_SCHEMA: dict[str, object] = {
                 "type": "object",
                 "properties": {
                     "hash": {"type": "string"},
-                    "score": {"type": "integer"},
+                    "score": {"type": "number"},
                     "why": {"type": "string"},
                 },
                 "required": ["hash", "score", "why"],

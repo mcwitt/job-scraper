@@ -49,8 +49,9 @@ TEMPLATE = """\
   </thead>
   <tbody>
     {% for job in jobs %}
+    {% set pct = (job.score * 100) | round(0) | int %}
     <tr>
-      <td><span class="score {{ score_class(job.score) }}">{{ job.score }}</span></td>
+      <td><span class="score {{ score_class(job.score) }}">{{ pct }}</span></td>
       <td><a href="{{ job.url }}">{{ job.title }}</a></td>
       <td>{{ job.company }}</td>
       <td>{{ job.team or "" }}</td>
@@ -65,10 +66,10 @@ TEMPLATE = """\
 """
 
 
-def _score_class(score: int) -> str:
-    if score >= 70:
+def _score_class(score: float) -> str:
+    if score >= 0.7:
         return "score-high"
-    if score >= 40:
+    if score >= 0.4:
         return "score-mid"
     return "score-low"
 
