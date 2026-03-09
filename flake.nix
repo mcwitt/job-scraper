@@ -20,6 +20,7 @@
           ps: with ps; [
             anthropic
             beautifulsoup4
+            dacite
             httpx
             jinja2
             lxml

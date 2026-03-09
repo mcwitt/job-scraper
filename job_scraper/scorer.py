@@ -10,9 +10,9 @@ from anthropic.types import (
     TextBlock,
 )
 
-from job_scraper.models import Job, ScoredJob, scored_job
+from job_scraper.models import Job
 
-SYSTEM_PROMPT = """\
+CANDIDATE_PROMPT = """\
 You are a job-matching assistant. Score each job posting
 against the candidate profile below.
 
@@ -32,6 +32,31 @@ Then return a score from 0.0-1.0:
 Write "why" as a brief justification before assigning the score.
 
 ## Candidate Profile
+
+{profile}
+"""
+
+RECRUITER_PROMPT = """\
+You are a tech recruiter screening resumes. For each job posting,
+evaluate how likely you would move forward with this candidate
+for a recruiter screen.
+
+Consider:
+- Does the candidate meet the stated minimum qualifications?
+- Years of experience vs. what the role asks for
+- Keyword and technology overlap with the job description
+- Title / seniority alignment
+- Location or visa concerns (if stated)
+
+Score 0.0-1.0:
+- 0.9-1.0: Strong match — would immediately schedule a screen
+- 0.7-0.89: Likely move forward — most requirements met
+- 0.4-0.69: Borderline — some gaps, might pass depending on pool
+- 0.0-0.39: Would not advance — significant mismatch on requirements
+
+Write "why" as a brief justification before assigning the score.
+
+## Candidate Resume
 
 {profile}
 """
@@ -64,7 +89,8 @@ async def score_batch(
     client: anthropic.AsyncAnthropic,
     model: str,
     semaphore: asyncio.Semaphore,
-) -> dict[str, tuple[int, str]]:
+    system_prompt: str = CANDIDATE_PROMPT,
+) -> dict[str, tuple[float, str]]:
     """Score a batch of jobs in a single API call.
 
     Returns:
@@ -87,7 +113,7 @@ async def score_batch(
             model=model,
             max_tokens=8192,
             thinking={"type": "enabled", "budget_tokens": 4096},
-            system=SYSTEM_PROMPT.format(profile=profile),
+            system=system_prompt.format(profile=profile),
             messages=[{"role": "user", "content": user_msg}],
             output_config=OutputConfigParam(
                 format=JSONOutputFormatParam(
@@ -113,45 +139,55 @@ async def score_jobs(
         Callable[[str, dict[str, Any]], None],
     ],
     max_concurrent: int = 4,
-) -> list[ScoredJob]:
-    """Score jobs, using cache to skip already-scored ones."""
+    system_prompt: str = CANDIDATE_PROMPT,
+) -> dict[str, tuple[float, str]]:
+    """Score jobs, using cache to skip already-scored ones.
+
+    Returns:
+        Dict mapping job hash to (score, why).
+    """
     semaphore = asyncio.Semaphore(max_concurrent)
     cache_get, cache_put = cache
-    results: list[ScoredJob] = []
+    results: dict[str, tuple[float, str]] = {}
     to_score: list[Job] = []
 
     for job in jobs:
         cached = cache_get(job.hash)
         if cached is not None:
-            results.append(scored_job(job, cached["score"], cached["why"]))
+            results[job.hash] = (cached["score"], cached["why"])
         else:
             to_score.append(job)
 
     if to_score:
         batches = [
-            to_score[i : i + batch_size] for i in range(0, len(to_score), batch_size)
+            to_score[i : i + batch_size]
+            for i in range(0, len(to_score), batch_size)
         ]
         print(
             f"Scoring {len(to_score)} jobs "
             f"({len(results)} cached, {len(batches)} batches)..."
         )
 
-        async def run_batch(batch_num: int, batch: list[Job]) -> list[ScoredJob]:
+        async def run_batch(
+            batch_num: int, batch: list[Job]
+        ) -> dict[str, tuple[float, str]]:
             print(f"  Batch {batch_num}: {len(batch)} jobs...")
-            scores = await score_batch(batch, profile, client, model, semaphore)
-            scored: list[ScoredJob] = []
+            scores = await score_batch(
+                batch, profile, client, model, semaphore, system_prompt
+            )
             for job in batch:
                 score_data = scores.get(job.hash)
                 if score_data is None:
                     continue
                 score, why = score_data
                 cache_put(job.hash, {"score": score, "why": why})
-                scored.append(scored_job(job, score, why))
             print(f"  Batch {batch_num}: done")
-            return scored
+            return scores
 
-        batch_tasks = [run_batch(i + 1, batch) for i, batch in enumerate(batches)]
-        for scored in await asyncio.gather(*batch_tasks):
-            results.extend(scored)
+        batch_tasks = [
+            run_batch(i + 1, batch) for i, batch in enumerate(batches)
+        ]
+        for batch_scores in await asyncio.gather(*batch_tasks):
+            results.update(batch_scores)
 
     return results
