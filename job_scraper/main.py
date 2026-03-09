@@ -29,6 +29,7 @@ async def _run(
     keywords_path: Path,
     min_relevance: float,
     top_k: int | None,
+    linkedin_dir: Path,
 ) -> None:
     scrape_cache_path = cache_dir / "scrape.jsonl"
     score_cache_path = cache_dir / "scores.jsonl"
@@ -154,10 +155,12 @@ async def _run(
         print(f"Wrote {len(scored)} scored jobs to {output_path}")
 
         if report:
+            from job_scraper.linkedin import load as load_linkedin
             from job_scraper.report import render_report
 
+            lookup = load_linkedin(linkedin_dir)
             report_path = output_dir / "report.html"
-            render_report(scored, report_path)
+            render_report(scored, report_path, lookup=lookup)
             print(f"Report written to {report_path}")
 
 
@@ -198,6 +201,9 @@ def run(
         int | None,
         typer.Option(help="Keep at most K jobs by relevance"),
     ] = 100,
+    linkedin_dir: Annotated[
+        Path, typer.Option(help="LinkedIn data directory")
+    ] = Path("linkedin"),
 ) -> None:
     """Scrape and score job postings."""
     asyncio.run(
@@ -214,6 +220,7 @@ def run(
             keywords_path=keywords,
             min_relevance=min_relevance,
             top_k=top_k,
+            linkedin_dir=linkedin_dir,
         )
     )
 
