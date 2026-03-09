@@ -1,0 +1,18 @@
+## Skills
+- Primary languages: [e.g. Python, TypeScript]
+- Frameworks: [e.g. FastAPI, React]
+- Areas of expertise: [e.g. distributed systems, ML infrastructure]
+
+## Preferences
+- Role type: [e.g. backend engineer, full-stack, ML engineer]
+- Company stage: [e.g. startup, growth, public]
+- Team size: [e.g. small team, large org]
+- Remote/hybrid/onsite: [e.g. remote preferred]
+
+## Dealbreakers
+- [e.g. no defense/surveillance work]
+- [e.g. must have IC track]
+
+## Compensation
+- Target: [e.g. $200k+ base]
+- Equity: [e.g. meaningful equity preferred]
