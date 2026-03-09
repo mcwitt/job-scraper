@@ -63,7 +63,7 @@ TEMPLATE = """\
 <table>
   <thead>
     <tr>
-      <th title="Product of Candidate and Recruiter scores">Priority</th>
+      <th title="Geometric mean of Candidate and Recruiter scores">Score</th>
       <th data-sort-desc>Posted</th>
       <th>Title</th>
       <th>Company</th>
@@ -77,12 +77,12 @@ TEMPLATE = """\
     {% for job in jobs %}
     {% set cv = job.fit_candidate.value %}
     {% set rv = job.fit_recruiter.value if job.fit_recruiter else cv %}
-    {% set pri = cv * rv %}
+    {% set score = (cv * rv) ** 0.5 %}
     {% set first, second = lookup(job.company) %}
     <tr>
-      <td class="tip" data-sort="{{ pri }}">
-        <span class="score {{ score_class(pri) }}"
-          >{{ (pri * 100) | round(0) | int }}</span>
+      <td class="tip" data-sort="{{ score }}">
+        <span class="score {{ score_class(score) }}"
+          >{{ (score * 100) | round(0) | int }}</span>
         <dl class="tip-body">
           <dt>Candidate: {{ (cv * 100) | round(0) | int }}</dt>
           <dd>{{ job.fit_candidate.why }}</dd>
