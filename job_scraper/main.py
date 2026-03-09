@@ -11,7 +11,7 @@ from job_scraper.cache import open_cache
 from job_scraper.models import Job
 from job_scraper.relevance import score_relevance
 from job_scraper.scraper import ScrapeFn, discover
-from job_scraper.scraper.http import make_get
+from job_scraper.scraper.http import Http
 
 app = typer.Typer()
 
@@ -52,14 +52,15 @@ async def _run(
         httpx.AsyncClient(follow_redirects=True, timeout=30) as client,
         open_cache(scrape_cache_path, ttl=scrape_ttl) as scrape_cache,
     ):
-        get = make_get(client, scrape_cache, semaphore)
+        cache_get, cache_put = scrape_cache
+        http = Http(client, cache_get, cache_put, semaphore)
 
         # Scrape all sources concurrently
         all_jobs: list[Job] = []
 
         async def collect(name: str, fn: ScrapeFn) -> list[Job]:
             jobs = []
-            async for job in fn(get):
+            async for job in fn(http):
                 jobs.append(job)
             print(f"  {name}: {len(jobs)} jobs")
             return jobs
