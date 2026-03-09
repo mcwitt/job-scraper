@@ -22,6 +22,7 @@ TEMPLATE = """\
     box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
   th, td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid #eee; }
   th { background: #fafafa; font-weight: 600; position: sticky; top: 0; }
+  th[title] { cursor: help; }
   tr:hover { background: #f9f9f9; }
   a { color: #0066cc; text-decoration: none; }
   a:hover { text-decoration: underline; }
@@ -31,17 +32,25 @@ TEMPLATE = """\
   .score-high { background: #d4edda; color: #155724; }
   .score-mid { background: #fff3cd; color: #856404; }
   .score-low { background: #f8d7da; color: #721c24; }
+  .tip { position: relative; cursor: help; }
+  .tip .tip-body { display: none; position: absolute; left: 0; top: 100%;
+    z-index: 10; background: white; border: 1px solid #ddd;
+    border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    padding: 0.75rem; min-width: 320px; max-width: 420px;
+    font-weight: normal; font-size: 0.85em; color: #333;
+    white-space: normal; }
+  .tip:hover .tip-body, .tip.active .tip-body { display: block; }
+  .tip-body dt { font-weight: 600; margin-top: 0.4rem; }
+  .tip-body dt:first-child { margin-top: 0; }
+  .tip-body dd { margin: 0.1rem 0 0 0; color: #555; }
   .cell { max-width: 300px; overflow: hidden; text-overflow: ellipsis;
     white-space: nowrap; cursor: default; }
   .cell.expanded { white-space: normal; overflow: visible; }
-  .why { max-width: 450px; font-size: 0.9em; color: #555; }
-  .conns { font-size: 0.82em; max-width: 200px; }
+  .conns { font-size: 0.82em; max-width: 100px; }
   .conns a { color: #0066cc; }
   .date { white-space: nowrap; font-size: 0.85em; }
   .age-fresh { font-weight: 700; padding: 0.25rem 0.5rem;
     border-radius: 4px; background: #d4edda; color: #155724; }
-  .age-stale { font-weight: 700; padding: 0.25rem 0.5rem;
-    border-radius: 4px; background: #f8d7da; color: #721c24; }
   .meta { font-size: 0.85em; color: #777; }
 </style>
 </head>
@@ -51,31 +60,41 @@ TEMPLATE = """\
 <table>
   <thead>
     <tr>
-      <th>Score</th>
+      <th title="Product of Candidate and Recruiter scores">Priority</th>
       <th>Posted</th>
       <th>Title</th>
       <th>Company</th>
+      <th title="1st-degree LinkedIn connections at this company">1st</th>
+      <th title="2nd-degree LinkedIn connections at this company">2nd</th>
       <th>Team</th>
       <th>Location</th>
-      <th>1st</th>
-      <th>2nd</th>
-      <th>Why</th>
     </tr>
   </thead>
   <tbody>
     {% for job in jobs %}
-    {% set pct = (job.score * 100) | round(0) | int %}
+    {% set cv = job.fit_candidate.value %}
+    {% set rv = job.fit_recruiter.value if job.fit_recruiter else cv %}
+    {% set pri = cv * rv %}
     {% set first, second = lookup(job.company) %}
     <tr>
-      <td><span class="score {{ score_class(job.score) }}">{{ pct }}</span></td>
+      <td class="tip">
+        <span class="score {{ score_class(pri) }}"
+          >{{ (pri * 100) | round(0) | int }}</span>
+        <dl class="tip-body">
+          <dt>Candidate: {{ (cv * 100) | round(0) | int }}</dt>
+          <dd>{{ job.fit_candidate.why }}</dd>
+          {% if job.fit_recruiter is not none %}
+          <dt>Recruiter: {{ (rv * 100) | round(0) | int }}</dt>
+          <dd>{{ job.fit_recruiter.why }}</dd>
+          {% endif %}
+        </dl>
+      </td>
       <td class="date">{% if job.posted %}
         <span class="age {{ date_class(job.posted) }}">
           {{- time_ago(job.posted) -}}
         </span>{% endif %}</td>
       <td class="cell"><a href="{{ job.url }}">{{ job.title }}</a></td>
       <td class="cell">{{ job.company }}</td>
-      <td class="cell">{{ job.team or "" }}</td>
-      <td class="cell">{{ job.location or "" }}</td>
       <td class="conns cell">
         {%- for c in first -%}
         <a href="{{ c.url }}">{{ c.name }}</a>
@@ -91,7 +110,8 @@ TEMPLATE = """\
         {{ "<br>" if not loop.last }}
         {%- endfor -%}
       </td>
-      <td class="cell why">{{ job.why }}</td>
+      <td class="cell">{{ job.team or "" }}</td>
+      <td class="cell">{{ job.location or "" }}</td>
     </tr>
     {% endfor %}
   </tbody>
@@ -99,6 +119,20 @@ TEMPLATE = """\
 <script>
 document.querySelectorAll('.cell').forEach(function(el) {
   el.addEventListener('click', function() { this.classList.toggle('expanded'); });
+});
+document.querySelectorAll('.tip').forEach(function(el) {
+  el.addEventListener('click', function(e) {
+    document.querySelectorAll('.tip.active').forEach(function(t) {
+      if (t !== el) t.classList.remove('active');
+    });
+    this.classList.toggle('active');
+    e.stopPropagation();
+  });
+});
+document.addEventListener('click', function() {
+  document.querySelectorAll('.tip.active').forEach(function(t) {
+    t.classList.remove('active');
+  });
 });
 </script>
 </body>
@@ -149,8 +183,6 @@ def _date_class(date_str: str | None) -> str:
     days = (datetime.now(timezone.utc) - dt).days
     if days < 7:
         return "age-fresh"
-    if days >= 90:
-        return "age-stale"
     return ""
 
 

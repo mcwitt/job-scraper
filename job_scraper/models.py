@@ -1,5 +1,7 @@
-from dataclasses import dataclass, fields
+from dataclasses import asdict, dataclass
 from typing import Any
+
+import dacite
 
 
 @dataclass(frozen=True)
@@ -16,13 +18,11 @@ class Job:
     comp: str | None = None
     location: str | None = None
 
-    def to_dict(self) -> dict[str, Any]:
-        return {f.name: getattr(self, f.name) for f in fields(self)}
 
-    @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "Job":
-        valid = {f.name for f in fields(cls)}
-        return cls(**{k: v for k, v in d.items() if k in valid})
+@dataclass(frozen=True)
+class Score:
+    value: float
+    why: str
 
 
 @dataclass(frozen=True)
@@ -34,21 +34,30 @@ class ScoredJob:
     description: str
     source: str
     scraped_at: str
-    score: float
-    why: str
+    fit_candidate: Score
     team: str | None = None
     posted: str | None = None
     comp: str | None = None
     location: str | None = None
-
-    def to_dict(self) -> dict[str, Any]:
-        return {f.name: getattr(self, f.name) for f in fields(self)}
-
-    @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "ScoredJob":
-        valid = {f.name for f in fields(cls)}
-        return cls(**{k: v for k, v in d.items() if k in valid})
+    fit_recruiter: Score | None = None
 
 
-def scored_job(job: Job, score: float, why: str) -> ScoredJob:
-    return ScoredJob(**job.to_dict(), score=score, why=why)
+_DACITE = dacite.Config(strict=True)
+
+to_dict = asdict
+
+
+def from_dict[T](cls: type[T], d: dict[str, Any]) -> T:
+    return dacite.from_dict(cls, d, config=_DACITE)
+
+
+def scored_job(
+    job: Job,
+    fit_candidate: Score,
+    fit_recruiter: Score | None = None,
+) -> ScoredJob:
+    return ScoredJob(
+        **to_dict(job),
+        fit_candidate=fit_candidate,
+        fit_recruiter=fit_recruiter,
+    )

@@ -8,7 +8,7 @@ import httpx
 import typer
 
 from job_scraper.cache import open_cache
-from job_scraper.models import Job
+from job_scraper.models import Job, to_dict
 from job_scraper.relevance import score_relevance
 from job_scraper.scraper import ScrapeFn, discover
 from job_scraper.scraper._http import Http
@@ -75,7 +75,7 @@ async def _run(
         raw_path = output_dir / "jobs_raw.jsonl"
         with raw_path.open("w") as f:
             for job in all_jobs:
-                f.write(json.dumps(job.to_dict()) + "\n")
+                f.write(json.dumps(to_dict(job)) + "\n")
         print(f"Wrote {len(all_jobs)} raw jobs to {raw_path}")
 
         # BM25 relevance scoring
@@ -91,7 +91,7 @@ async def _run(
         rel_path = output_dir / "jobs_relevance.jsonl"
         with rel_path.open("w") as f:
             for job, rel in scored_rel:
-                d = job.to_dict()
+                d = to_dict(job)
                 d["relevance"] = round(rel, 4)
                 f.write(json.dumps(d) + "\n")
         print(f"Wrote {len(scored_rel)} jobs with relevance to {rel_path}")
@@ -123,7 +123,7 @@ async def _run(
             # Write unsorted jobs
             with output_path.open("w") as f:
                 for job in unique_jobs:
-                    f.write(json.dumps(job.to_dict()) + "\n")
+                    f.write(json.dumps(to_dict(job)) + "\n")
             print(f"Wrote {len(unique_jobs)} jobs to {output_path}")
             return
 
@@ -134,25 +134,65 @@ async def _run(
 
         import anthropic
 
-        from job_scraper.scorer import score_jobs
+        from job_scraper.models import Score, ScoredJob, scored_job
+        from job_scraper.scorer import (
+            CANDIDATE_PROMPT,
+            RECRUITER_PROMPT,
+            score_jobs,
+        )
 
-        async with open_cache(score_cache_path, ttl=0) as score_cache:
-            ai = anthropic.AsyncAnthropic()
-            scored = await score_jobs(
+        recruiter_cache_path = cache_dir / "fit_recruiter.jsonl"
+        ai = anthropic.AsyncAnthropic()
+
+        async with open_cache(score_cache_path, ttl=0) as cand_cache:
+            print("--- Candidate fit scoring ---")
+            cand_scores = await score_jobs(
                 unique_jobs,
                 profile_text,
                 ai,
                 model,
                 batch_size,
-                score_cache,
+                cand_cache,
+                system_prompt=CANDIDATE_PROMPT,
             )
 
-        # Sort by score descending
-        scored.sort(key=lambda j: j.score, reverse=True)
+        async with open_cache(recruiter_cache_path, ttl=0) as rec_cache:
+            print("--- Recruiter fit scoring ---")
+            rec_scores = await score_jobs(
+                unique_jobs,
+                profile_text,
+                ai,
+                model,
+                batch_size,
+                rec_cache,
+                system_prompt=RECRUITER_PROMPT,
+            )
+
+        # Merge into ScoredJob objects
+        scored = []
+        for job in unique_jobs:
+            cand = cand_scores.get(job.hash)
+            if cand is None:
+                continue
+            rec = rec_scores.get(job.hash)
+            scored.append(
+                scored_job(
+                    job,
+                    fit_candidate=Score(*cand),
+                    fit_recruiter=Score(*rec) if rec else None,
+                )
+            )
+
+        # Sort by priority (candidate * recruiter) descending
+        def _priority(j: ScoredJob) -> float:
+            rv = j.fit_recruiter.value if j.fit_recruiter else j.fit_candidate.value
+            return j.fit_candidate.value * rv
+
+        scored.sort(key=_priority, reverse=True)
 
         with output_path.open("w") as f:
             for job in scored:
-                f.write(json.dumps(job.to_dict()) + "\n")
+                f.write(json.dumps(to_dict(job)) + "\n")
         print(f"Wrote {len(scored)} scored jobs to {output_path}")
 
         if report:
