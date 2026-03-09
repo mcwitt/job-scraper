@@ -11,24 +11,16 @@ from job_scraper.scraper import GetFn
 
 
 def _html_to_text(raw: str) -> str:
-    """Convert HTML content to plain text."""
     unescaped = html.unescape(raw)
     soup = BeautifulSoup(unescaped, "lxml")
     return soup.get_text(separator="\n", strip=True)
 
 
-async def scrape(boards: list[str], get: GetFn) -> AsyncIterator[Job]:
-    """Scrape jobs from Greenhouse board API.
+def scrape_board(token: str):
+    """Return a scrape function for a Greenhouse board."""
 
-    Args:
-        boards: List of board tokens (e.g. ["stripe", "figma"]).
-        get: Cached HTTP GET function.
-
-    Yields:
-        Job records.
-    """
-    now = datetime.now(timezone.utc).isoformat()
-    for token in boards:
+    async def scrape(get: GetFn) -> AsyncIterator[Job]:
+        now = datetime.now(timezone.utc).isoformat()
         url = f"https://boards-api.greenhouse.io/v1/boards/{token}/jobs?content=true"
         body = await get(url)
         data = json.loads(body)
@@ -63,3 +55,5 @@ async def scrape(boards: list[str], get: GetFn) -> AsyncIterator[Job]:
                 source=f"greenhouse:{token}",
                 scraped_at=now,
             )
+
+    return scrape

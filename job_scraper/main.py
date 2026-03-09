@@ -10,14 +10,13 @@ import typer
 from job_scraper.cache import open_cache
 from job_scraper.models import Job
 from job_scraper.relevance import score_relevance
-from job_scraper.scraper.greenhouse import scrape as greenhouse_scrape
+from job_scraper.scraper import ScrapeFn, discover
 from job_scraper.scraper.http import make_get
 
 app = typer.Typer()
 
 
 async def _run(
-    boards: list[str],
     cache_dir: Path,
     output_dir: Path,
     scrape_ttl: int,
@@ -39,23 +38,33 @@ async def _run(
 
     semaphore = asyncio.Semaphore(max_concurrent)
 
+    scrapers = discover()
+    if not scrapers:
+        print("No scrapers found in job_scraper/scraper/.")
+        return
+    print(
+        f"Discovered {len(scrapers)} scrapers: "
+        f"{', '.join(name for name, _ in scrapers)}"
+    )
+
     async with (
         httpx.AsyncClient(follow_redirects=True, timeout=30) as client,
         open_cache(scrape_cache_path, ttl=scrape_ttl) as scrape_cache,
     ):
         get = make_get(client, scrape_cache, semaphore)
 
-        # Scrape all boards concurrently
+        # Scrape all sources concurrently
         all_jobs: list[Job] = []
 
-        async def collect_board(token: str) -> list[Job]:
+        async def collect(name: str, fn: ScrapeFn) -> list[Job]:
             jobs = []
-            async for job in greenhouse_scrape([token], get):
+            async for job in fn(get):
                 jobs.append(job)
+            print(f"  {name}: {len(jobs)} jobs")
             return jobs
 
         async with asyncio.TaskGroup() as tg:
-            tasks = [tg.create_task(collect_board(token)) for token in boards]
+            tasks = [tg.create_task(collect(name, fn)) for name, fn in scrapers]
 
         for task in tasks:
             all_jobs.extend(task.result())
@@ -128,7 +137,12 @@ async def _run(
         async with open_cache(score_cache_path, ttl=0) as score_cache:
             ai = anthropic.AsyncAnthropic()
             scored = await score_jobs(
-                unique_jobs, profile_text, ai, model, batch_size, score_cache
+                unique_jobs,
+                profile_text,
+                ai,
+                model,
+                batch_size,
+                score_cache,
             )
 
         # Sort by score descending
@@ -149,7 +163,6 @@ async def _run(
 
 @app.command()
 def run(
-    boards: Annotated[list[str], typer.Argument(help="Greenhouse board tokens")],
     cache_dir: Annotated[Path, typer.Option(help="Cache directory")] = Path(
         "data/cache"
     ),
@@ -163,9 +176,9 @@ def run(
     model: Annotated[
         str, typer.Option(help="Claude model for scoring")
     ] = "claude-haiku-4-5-20251001",
-    profile: Annotated[
-        Path, typer.Option(help="Path to candidate profile")
-    ] = Path("profile.md"),
+    profile: Annotated[Path, typer.Option(help="Path to candidate profile")] = Path(
+        "profile.md"
+    ),
     max_concurrent: Annotated[
         int, typer.Option(help="Max concurrent HTTP requests")
     ] = 5,
@@ -175,20 +188,20 @@ def run(
     report: Annotated[
         bool, typer.Option("--report", help="Generate HTML report")
     ] = False,
-    keywords: Annotated[
-        Path, typer.Option(help="Path to keywords file")
-    ] = Path("keywords.txt"),
+    keywords: Annotated[Path, typer.Option(help="Path to keywords file")] = Path(
+        "keywords.txt"
+    ),
     min_relevance: Annotated[
         float, typer.Option(help="Min BM25 relevance score (0-1)")
     ] = 0.1,
     top_k: Annotated[
-        int | None, typer.Option(help="Keep at most K jobs by relevance")
+        int | None,
+        typer.Option(help="Keep at most K jobs by relevance"),
     ] = 100,
 ) -> None:
-    """Scrape and score job postings from Greenhouse boards."""
+    """Scrape and score job postings."""
     asyncio.run(
         _run(
-            boards=boards,
             cache_dir=cache_dir,
             output_dir=output_dir,
             scrape_ttl=scrape_ttl,
