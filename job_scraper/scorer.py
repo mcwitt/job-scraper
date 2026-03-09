@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 from collections.abc import Callable
 from typing import Any
@@ -151,8 +152,14 @@ async def score_jobs(
     results: dict[str, tuple[float, str]] = {}
     to_score: list[Job] = []
 
+    # Include prompt+profile in cache key so edits invalidate cached scores
+    context_hash = hashlib.sha256(
+        (system_prompt + "\0" + profile).encode()
+    ).hexdigest()[:12]
+
     for job in jobs:
-        cached = cache_get(job.hash)
+        key = f"{job.hash}:{context_hash}"
+        cached = cache_get(key)
         if cached is not None:
             results[job.hash] = (cached["score"], cached["why"])
         else:
@@ -180,7 +187,10 @@ async def score_jobs(
                 if score_data is None:
                     continue
                 score, why = score_data
-                cache_put(job.hash, {"score": score, "why": why})
+                cache_put(
+                    f"{job.hash}:{context_hash}",
+                    {"score": score, "why": why},
+                )
             print(f"  Batch {batch_num}: done")
             return scores
 
