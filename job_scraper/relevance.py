@@ -1,5 +1,6 @@
 import re
 
+import numpy as np
 from rank_bm25 import BM25Okapi
 
 from job_scraper.models import Job
@@ -15,7 +16,9 @@ def score_relevance(
 ) -> list[tuple[Job, float]]:
     """BM25-score each job against keyword query terms.
 
-    Returns all jobs paired with normalized relevance scores (0-1).
+    Returns all jobs paired with percentile-rank scores (0-1).
+    Each job's score is the fraction of jobs it scores above,
+    so the result is stable against small corpus changes.
     """
     if not jobs:
         return []
@@ -33,11 +36,11 @@ def score_relevance(
     bm25 = BM25Okapi(corpus)
     raw_scores = bm25.get_scores(query_tokens)
 
-    lo, hi = float(min(raw_scores)), float(max(raw_scores))
-    if hi == lo:
-        return [(job, 1.0) for job in jobs]
+    n = len(raw_scores)
+    ranks = np.argsort(np.argsort(raw_scores)).astype(float)
+    percentiles = ranks / (n - 1) if n > 1 else np.ones(n)
 
     return [
-        (job, (score - lo) / (hi - lo))
-        for job, score in zip(jobs, raw_scores, strict=True)
+        (job, float(p))
+        for job, p in zip(jobs, percentiles, strict=True)
     ]
