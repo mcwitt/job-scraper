@@ -291,9 +291,8 @@ def run(
     ] = "title,company,team",
 ) -> None:
     """Scrape and score job postings."""
-    logging.basicConfig(
-        format="%(message)s", level=logging.INFO
-    )
+    logging.basicConfig(format="%(message)s")
+    logging.getLogger("job_scraper").setLevel(logging.INFO)
     if dedup_fields:
         fields: tuple[str, ...] = tuple(
             f.strip() for f in dedup_fields.split(",")
