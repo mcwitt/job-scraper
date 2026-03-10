@@ -23,7 +23,7 @@ def _html_to_text(raw: str) -> str:
     return soup.get_text(separator="\n", strip=True)
 
 
-def scrape_board(company: str, instance: str, site: str):
+def scrape_board(company: str, instance: str, site: str, *, name: str):
     """Return a scrape function for a Workday career site.
 
     Uses http.post() for listing pagination and http.get() for detail
@@ -34,7 +34,6 @@ def scrape_board(company: str, instance: str, site: str):
 
     async def scrape(http: Http) -> AsyncIterator[Job]:
         now = datetime.now(UTC).isoformat()
-        company_name = company.upper()
 
         # Phase 1: paginate listings via POST (cached)
         stubs: list[tuple[str, str, str | None]] = []
@@ -122,11 +121,11 @@ def scrape_board(company: str, instance: str, site: str):
             stubs, details, strict=True
         ):
             post_url = f"{base}/{site}{ext_path}"
-            h = job_hash(title, company_name, description)
+            h = job_hash(title, name, description)
             yield Job(
                 hash=h,
                 title=title,
-                company=company_name,
+                company=name,
                 team=None,
                 url=post_url,
                 posted=posted,

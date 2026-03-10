@@ -22,7 +22,7 @@ def _format_salary(salary: dict) -> str | None:
     return " - ".join(parts) + (f" / {interval}" if interval else "")
 
 
-def scrape_board(company: str):
+def scrape_board(company: str, *, name: str):
     """Return a scrape function for a Lever job board."""
 
     async def scrape(http: Http) -> AsyncIterator[Job]:
@@ -51,12 +51,11 @@ def scrape_board(company: str):
             salary = posting.get("salaryRange")
             comp = _format_salary(salary) if salary else None
 
-            company_name = categories.get("company", company)
-            h = job_hash(title, company_name, description)
+            h = job_hash(title, name, description)
             yield Job(
                 hash=h,
                 title=title,
-                company=company_name,
+                company=name,
                 team=team,
                 url=post_url,
                 posted=posted,

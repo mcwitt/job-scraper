@@ -14,7 +14,7 @@ def _format_compensation(comp: dict) -> str | None:
     return None
 
 
-def scrape_board(board: str):
+def scrape_board(board: str, *, name: str):
     """Return a scrape function for an Ashby job board."""
 
     async def scrape(http: Http) -> AsyncIterator[Job]:
@@ -38,12 +38,11 @@ def scrape_board(board: str):
             comp_data = posting.get("compensation")
             comp = _format_compensation(comp_data) if comp_data else None
 
-            company = posting.get("organizationName", board)
-            h = job_hash(title, company, description)
+            h = job_hash(title, name, description)
             yield Job(
                 hash=h,
                 title=title,
-                company=company,
+                company=name,
                 team=team,
                 url=post_url,
                 posted=posted,

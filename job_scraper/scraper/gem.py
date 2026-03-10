@@ -7,7 +7,7 @@ from job_scraper.models import Job
 from job_scraper.scraper.http import Http
 
 
-def scrape_board(company: str):
+def scrape_board(company: str, *, name: str):
     """Return a scrape function for a Gem job board."""
 
     async def scrape(http: Http) -> AsyncIterator[Job]:
@@ -31,12 +31,11 @@ def scrape_board(company: str):
             published = posting.get("first_published_at")
             posted = published[:10] if published else None
 
-            company_name = company.capitalize()
-            h = job_hash(title, company_name, description)
+            h = job_hash(title, name, description)
             yield Job(
                 hash=h,
                 title=title,
-                company=company_name,
+                company=name,
                 team=team,
                 url=post_url,
                 posted=posted,
