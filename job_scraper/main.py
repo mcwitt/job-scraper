@@ -159,37 +159,34 @@ async def _run(
 
         from job_scraper.models import Score, ScoredJob, scored_job
         from job_scraper.scorer import (
-            CANDIDATE_PROMPT,
-            RECRUITER_PROMPT,
-            score_jobs,
+            score_candidate,
+            score_recruiter,
         )
 
         recruiter_cache_path = cache_dir / "fit_recruiter.jsonl"
         ai = anthropic.AsyncAnthropic()
 
-        async with open_cache(score_cache_path, ttl=0) as cand_cache:
+        async with open_cache(score_cache_path) as cand_cache:
             print("--- Candidate fit scoring ---")
-            cand_scores = await score_jobs(
+            cand_scores = await score_candidate(
                 unique_jobs,
                 profile_text,
                 ai,
                 model,
                 batch_size,
                 cand_cache,
-                system_prompt=CANDIDATE_PROMPT,
             )
 
         resume_text = resume_path.read_text()
-        async with open_cache(recruiter_cache_path, ttl=0) as rec_cache:
+        async with open_cache(recruiter_cache_path) as rec_cache:
             print("--- Recruiter fit scoring ---")
-            rec_scores = await score_jobs(
+            rec_scores = await score_recruiter(
                 unique_jobs,
                 resume_text,
                 ai,
                 model,
                 batch_size,
                 rec_cache,
-                system_prompt=RECRUITER_PROMPT,
             )
 
         # Merge into ScoredJob objects
