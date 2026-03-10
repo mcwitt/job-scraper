@@ -118,14 +118,14 @@ async def score_jobs(
             to_score.append(job)
 
     if not to_score:
-        logger.info("All %d jobs cached", len(results))
+        logger.info("all cached count=%d", len(results))
         return results
 
     batches = [
         to_score[i : i + batch_size] for i in range(0, len(to_score), batch_size)
     ]
     logger.info(
-        "Scoring %d jobs (%d cached, %d batches)...",
+        "scoring jobs=%d cached=%d batches=%d",
         len(to_score),
         len(results),
         len(batches),
@@ -134,7 +134,7 @@ async def score_jobs(
     async def run_batch(
         batch_num: int, batch: list[Job]
     ) -> dict[str, tuple[float, str]]:
-        logger.info("Batch %d: %d jobs...", batch_num, len(batch))
+        logger.info("batch=%d jobs=%d", batch_num, len(batch))
         scores = await score_batch(
             batch, profile, client, model, semaphore, system_prompt
         )
@@ -142,7 +142,7 @@ async def score_jobs(
             score_data = scores.get(job.hash)
             if score_data is None:
                 logger.warning(
-                    "No score returned for %s — %s at %s",
+                    "no score returned job=%s title=%r company=%s",
                     job.hash[:12],
                     job.title,
                     job.company,
