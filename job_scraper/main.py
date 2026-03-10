@@ -1,6 +1,7 @@
 import asyncio
 import dataclasses
 import json
+import logging
 import statistics
 from pathlib import Path
 from typing import Annotated
@@ -14,6 +15,7 @@ from job_scraper.relevance import score_relevance
 from job_scraper.scraper import ScrapeFn, discover
 from job_scraper.scraper.http import Http
 
+logger = logging.getLogger(__name__)
 app = typer.Typer()
 
 
@@ -44,11 +46,12 @@ async def _run(
 
     scrapers = discover()
     if not scrapers:
-        print("No scrapers found in job_scraper/scraper/.")
+        logger.warning("No scrapers found in job_scraper/scraper/.")
         return
-    print(
-        f"Discovered {len(scrapers)} scrapers: "
-        f"{', '.join(name for name, _, _ in scrapers)}"
+    logger.info(
+        "Discovered %d scrapers: %s",
+        len(scrapers),
+        ", ".join(name for name, _, _ in scrapers),
     )
 
     async with (
@@ -65,7 +68,7 @@ async def _run(
             jobs = []
             async for job in fn(h):
                 jobs.append(job)
-            print(f"  {name}: {len(jobs)} jobs")
+            logger.info("  %s: %d jobs", name, len(jobs))
             return jobs
 
         async with asyncio.TaskGroup() as tg:
@@ -90,7 +93,7 @@ async def _run(
         with raw_path.open("w") as f:
             for job in all_jobs:
                 f.write(json.dumps(to_dict(job)) + "\n")
-        print(f"Wrote {len(all_jobs)} raw jobs to {raw_path}")
+        logger.info("Wrote %d raw jobs to %s", len(all_jobs), raw_path)
 
         # BM25 relevance scoring
         kw_lines = keywords_path.read_text().splitlines()
@@ -108,18 +111,26 @@ async def _run(
                 d = to_dict(job)
                 d["relevance"] = round(rel, 4)
                 f.write(json.dumps(d) + "\n")
-        print(f"Wrote {len(scored_rel)} jobs with relevance to {rel_path}")
+        logger.info(
+            "Wrote %d jobs with relevance to %s",
+            len(scored_rel),
+            rel_path,
+        )
 
         # Filter by threshold
         passing = [(j, r) for j, r in scored_rel if r >= min_relevance]
         passing.sort(key=lambda x: x[1], reverse=True)
 
         scores = [r for _, r in scored_rel]
-        print(
-            f"Relevance: {len(all_jobs)} total, "
-            f"{len(passing)} pass >= {min_relevance}"
-            f" (min={min(scores):.3f}, max={max(scores):.3f},"
-            f" median={statistics.median(scores):.3f})"
+        logger.info(
+            "Relevance: %d total, %d pass >= %s"
+            " (min=%.3f, max=%.3f, median=%.3f)",
+            len(all_jobs),
+            len(passing),
+            min_relevance,
+            min(scores),
+            max(scores),
+            statistics.median(scores),
         )
 
         # Deduplicate by selected fields (before top-k truncation)
@@ -131,9 +142,10 @@ async def _run(
                 if key not in seen:
                     seen[key] = len(deduped)
                     deduped.append((job, rel))
-            print(
-                f"{len(deduped)} unique jobs after dedup"
-                f" on {','.join(dedup_fields)}."
+            logger.info(
+                "%d unique jobs after dedup on %s",
+                len(deduped),
+                ",".join(dedup_fields),
             )
             passing = deduped
 
@@ -147,13 +159,17 @@ async def _run(
             with output_path.open("w") as f:
                 for job in unique_jobs:
                     f.write(json.dumps(to_dict(job)) + "\n")
-            print(f"Wrote {len(unique_jobs)} jobs to {output_path}")
+            logger.info(
+                "Wrote %d jobs to %s", len(unique_jobs), output_path
+            )
             return
 
         # Score
         profile_text = profile_path.read_text()
         if not profile_text.strip():
-            print(f"Warning: {profile_path} is empty. Scores may be meaningless.")
+            logger.warning(
+                "%s is empty. Scores may be meaningless.", profile_path
+            )
 
         import anthropic
 
@@ -167,7 +183,7 @@ async def _run(
         ai = anthropic.AsyncAnthropic()
 
         async with open_cache(score_cache_path) as cand_cache:
-            print("--- Candidate fit scoring ---")
+            logger.info("--- Candidate fit scoring ---")
             cand_scores = await score_interest(
                 unique_jobs,
                 profile_text,
@@ -179,7 +195,7 @@ async def _run(
 
         resume_text = resume_path.read_text()
         async with open_cache(recruiter_cache_path) as rec_cache:
-            print("--- Recruiter fit scoring ---")
+            logger.info("--- Recruiter fit scoring ---")
             rec_scores = await score_fit(
                 unique_jobs,
                 resume_text,
@@ -214,7 +230,7 @@ async def _run(
         with output_path.open("w") as f:
             for job in scored:
                 f.write(json.dumps(to_dict(job)) + "\n")
-        print(f"Wrote {len(scored)} scored jobs to {output_path}")
+        logger.info("Wrote %d scored jobs to %s", len(scored), output_path)
 
         if report:
             from job_scraper.linkedin import load as load_linkedin
@@ -223,7 +239,7 @@ async def _run(
             lookup = load_linkedin(linkedin_dir)
             report_path = output_dir / "report.html"
             render_report(scored, report_path, lookup=lookup)
-            print(f"Report written to {report_path}")
+            logger.info("Report written to %s", report_path)
 
 
 @app.command()
@@ -275,6 +291,9 @@ def run(
     ] = "title,company,team",
 ) -> None:
     """Scrape and score job postings."""
+    logging.basicConfig(
+        format="%(message)s", level=logging.INFO
+    )
     if dedup_fields:
         fields: tuple[str, ...] = tuple(
             f.strip() for f in dedup_fields.split(",")

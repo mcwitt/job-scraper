@@ -1,6 +1,7 @@
 import asyncio
 import html
 import json
+import logging
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 
@@ -10,6 +11,8 @@ from job_scraper.hash import job_hash
 from job_scraper.models import Job
 from job_scraper.scraper.http import Http
 
+logger = logging.getLogger(__name__)
+
 _PAGE_SIZE = 20
 _DETAIL_CONCURRENCY = 20
 
@@ -18,10 +21,6 @@ def _html_to_text(raw: str) -> str:
     unescaped = html.unescape(raw)
     soup = BeautifulSoup(unescaped, "lxml")
     return soup.get_text(separator="\n", strip=True)
-
-
-def _log(msg: str) -> None:
-    print(msg, flush=True)
 
 
 def scrape_board(company: str, instance: str, site: str):
@@ -51,7 +50,7 @@ def scrape_board(company: str, instance: str, site: str):
         )
         first = json.loads(first_body)
         total = first.get("total", 0)
-        _log(f"  workday:{company}: {total} listings")
+        logger.info("  workday:%s: %d listings", company, total)
 
         for posting in first.get("jobPostings", []):
             stubs.append((
@@ -105,15 +104,19 @@ def scrape_board(company: str, instance: str, site: str):
             finally:
                 done += 1
                 if done % 200 == 0:
-                    _log(
-                        f"  workday:{company}:"
-                        f" {done}/{len(stubs)} details"
+                    logger.info(
+                        "  workday:%s: %d/%d details",
+                        company,
+                        done,
+                        len(stubs),
                     )
 
         details = await asyncio.gather(*(
             fetch_detail(ext_path) for _, ext_path, _ in stubs
         ))
-        _log(f"  workday:{company}: {len(details)} details done")
+        logger.info(
+            "  workday:%s: %d details done", company, len(details)
+        )
 
         for (title, ext_path, location), (description, posted) in zip(
             stubs, details, strict=True

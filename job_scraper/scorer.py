@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import json
+import logging
 from collections.abc import Callable
 from typing import Any
 
@@ -12,6 +13,8 @@ from anthropic.types import (
 )
 
 from job_scraper.models import Job
+
+logger = logging.getLogger(__name__)
 
 RESPONSE_SCHEMA: dict[str, object] = {
     "type": "object",
@@ -121,15 +124,17 @@ async def score_jobs(
             to_score[i : i + batch_size]
             for i in range(0, len(to_score), batch_size)
         ]
-        print(
-            f"Scoring {len(to_score)} jobs "
-            f"({len(results)} cached, {len(batches)} batches)..."
+        logger.info(
+            "Scoring %d jobs (%d cached, %d batches)...",
+            len(to_score),
+            len(results),
+            len(batches),
         )
 
         async def run_batch(
             batch_num: int, batch: list[Job]
         ) -> dict[str, tuple[float, str]]:
-            print(f"  Batch {batch_num}: {len(batch)} jobs...")
+            logger.info("  Batch %d: %d jobs...", batch_num, len(batch))
             scores = await score_batch(
                 batch, profile, client, model, semaphore, system_prompt
             )
@@ -142,7 +147,7 @@ async def score_jobs(
                     f"{job.hash}:{context_hash}",
                     {"score": score, "why": why},
                 )
-            print(f"  Batch {batch_num}: done")
+            logger.info("  Batch %d: done", batch_num)
             return scores
 
         batch_tasks = [
