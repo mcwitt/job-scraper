@@ -134,7 +134,7 @@ async def score_jobs(
         async def run_batch(
             batch_num: int, batch: list[Job]
         ) -> dict[str, tuple[float, str]]:
-            logger.info("  Batch %d: %d jobs...", batch_num, len(batch))
+            logger.info("Batch %d: %d jobs...", batch_num, len(batch))
             scores = await score_batch(
                 batch, profile, client, model, semaphore, system_prompt
             )
@@ -147,7 +147,7 @@ async def score_jobs(
                     f"{job.hash}:{context_hash}",
                     {"score": score, "why": why},
                 )
-            logger.info("  Batch %d: done", batch_num)
+            logger.info("Batch %d: done", batch_num)
             return scores
 
         batch_tasks = [
