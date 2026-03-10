@@ -21,7 +21,8 @@ def _load(path: Path, ttl: float) -> dict[str, dict[str, Any]]:
         ts = record.get("_ts", 0)
         if key is None:
             continue
-        if ttl > 0 and (now - ts) > ttl:
+        entry_ttl = record.get("_ttl", ttl)
+        if entry_ttl > 0 and (now - ts) > entry_ttl:
             continue
         entries[key] = record
     return entries

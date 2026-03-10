@@ -90,7 +90,7 @@ async def score_batch(
     client: anthropic.AsyncAnthropic,
     model: str,
     semaphore: asyncio.Semaphore,
-    system_prompt: str = CANDIDATE_PROMPT,
+    system_prompt: str,
 ) -> dict[str, tuple[float, str]]:
     """Score a batch of jobs in a single API call.
 
@@ -139,8 +139,8 @@ async def score_jobs(
         Callable[[str], dict[str, Any] | None],
         Callable[[str, dict[str, Any]], None],
     ],
+    system_prompt: str,
     max_concurrent: int = 4,
-    system_prompt: str = CANDIDATE_PROMPT,
 ) -> dict[str, tuple[float, str]]:
     """Score jobs, using cache to skip already-scored ones.
 
