@@ -58,9 +58,9 @@ TEMPLATE = """\
     border-radius: 4px; background: #d4edda; color: #155724; }
   .meta { font-size: 0.85em; color: #777; }
   .col-toggle { position: relative; display: inline-block; margin-bottom: 1rem; }
-  .col-toggle button { font: inherit; font-size: 0.85em; padding: 0.35rem 0.7rem;
+  .btn { font: inherit; font-size: 0.85em; padding: 0.35rem 0.7rem;
     background: white; border: 1px solid #ccc; border-radius: 6px; cursor: pointer; }
-  .col-toggle button:hover { background: #f0f0f0; }
+  .btn:hover:not(:disabled) { background: #f0f0f0; }
   .col-panel { display: none; position: absolute; left: 0; top: 100%;
     margin-top: 0.3rem; z-index: 20; background: white; border: 1px solid #ddd;
     border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);
@@ -69,14 +69,24 @@ TEMPLATE = """\
   .col-panel label { display: block; padding: 0.25rem 0.75rem; font-size: 0.85em;
     cursor: pointer; white-space: nowrap; }
   .col-panel label:hover { background: #f5f5f5; }
+  .pager { display: flex; align-items: center; gap: 0.5rem;
+    margin-bottom: 1rem; font-size: 0.85em; }
+  .btn:disabled { opacity: 0.4; cursor: default; }
 </style>
 </head>
 <body>
 <h1>Job Scraper Report</h1>
 <p class="meta" style="margin-bottom: 1rem;">{{ jobs | length }} jobs scored</p>
-<div class="col-toggle">
-  <button id="col-btn">Columns &#9662;</button>
-  <div class="col-panel" id="col-panel"></div>
+<div style="display: flex; gap: 1rem; align-items: start; flex-wrap: wrap;">
+  <div class="col-toggle">
+    <button class="btn" id="col-btn">Columns &#9662;</button>
+    <div class="col-panel" id="col-panel"></div>
+  </div>
+  <div class="pager" id="pager">
+    <button class="btn" id="pg-prev">&lsaquo; Prev</button>
+    <span id="pg-info"></span>
+    <button class="btn" id="pg-next">Next &rsaquo;</button>
+  </div>
 </div>
 <table>
   <thead>
@@ -241,6 +251,37 @@ document.addEventListener('click', function(e) {
   var thead = table.querySelector('thead');
   var tbody = table.querySelector('tbody');
   var ths = thead.querySelectorAll('th');
+  var PAGE_SIZE = 100;
+  var curPage = 0;
+  var pgPrev = document.getElementById('pg-prev');
+  var pgNext = document.getElementById('pg-next');
+  var pgInfo = document.getElementById('pg-info');
+  var pager = document.getElementById('pager');
+
+  function getRows() {
+    return Array.from(tbody.querySelectorAll('tr'));
+  }
+
+  function showPage(page) {
+    var rows = getRows();
+    var total = rows.length;
+    var numPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    curPage = Math.max(0, Math.min(page, numPages - 1));
+    var start = curPage * PAGE_SIZE;
+    var end = start + PAGE_SIZE;
+    rows.forEach(function(r, i) {
+      r.style.display = (i >= start && i < end) ? '' : 'none';
+    });
+    pgInfo.textContent = (start + 1) + '\u2013' + Math.min(end, total)
+      + ' of ' + total;
+    pgPrev.disabled = curPage === 0;
+    pgNext.disabled = curPage >= numPages - 1;
+    pager.style.display = numPages <= 1 ? 'none' : '';
+  }
+
+  pgPrev.addEventListener('click', function() { showPage(curPage - 1); });
+  pgNext.addEventListener('click', function() { showPage(curPage + 1); });
+
   ths.forEach(function(th, col) {
     th.addEventListener('click', function() {
       var desc = th.hasAttribute('data-sort-desc');
@@ -249,7 +290,7 @@ document.addEventListener('click', function(e) {
         : !th.classList.contains('sort-asc');
       ths.forEach(function(h) { h.classList.remove('sort-asc', 'sort-desc'); });
       th.classList.add(asc ? 'sort-asc' : 'sort-desc');
-      var rows = Array.from(tbody.querySelectorAll('tr'));
+      var rows = getRows();
       rows.sort(function(a, b) {
         var ac = a.children[col], bc = b.children[col];
         var av = ac.dataset.sort != null
@@ -261,8 +302,11 @@ document.addEventListener('click', function(e) {
         return asc ? cmp : -cmp;
       });
       rows.forEach(function(r) { tbody.appendChild(r); });
+      showPage(0);
     });
   });
+
+  showPage(0);
 })();
 </script>
 </body>
