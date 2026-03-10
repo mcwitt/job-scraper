@@ -50,7 +50,7 @@ def scrape_board(company: str, instance: str, site: str):
         )
         first = json.loads(first_body)
         total = first.get("total", 0)
-        logger.info("  workday:%s: %d listings", company, total)
+        logger.info("workday:%s: %d listings", company, total)
 
         for posting in first.get("jobPostings", []):
             stubs.append((
@@ -105,7 +105,7 @@ def scrape_board(company: str, instance: str, site: str):
                 done += 1
                 if done % 200 == 0:
                     logger.info(
-                        "  workday:%s: %d/%d details",
+                        "workday:%s: %d/%d details",
                         company,
                         done,
                         len(stubs),
@@ -115,7 +115,7 @@ def scrape_board(company: str, instance: str, site: str):
             fetch_detail(ext_path) for _, ext_path, _ in stubs
         ))
         logger.info(
-            "  workday:%s: %d details done", company, len(details)
+            "workday:%s: %d details done", company, len(details)
         )
 
         for (title, ext_path, location), (description, posted) in zip(

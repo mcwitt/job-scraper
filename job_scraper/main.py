@@ -68,7 +68,7 @@ async def _run(
             jobs = []
             async for job in fn(h):
                 jobs.append(job)
-            logger.info("  %s: %d jobs", name, len(jobs))
+            logger.info("%s: %d jobs", name, len(jobs))
             return jobs
 
         async with asyncio.TaskGroup() as tg:
