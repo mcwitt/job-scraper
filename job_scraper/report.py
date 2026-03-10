@@ -71,6 +71,7 @@ TEMPLATE = """\
       <th title="2nd-degree LinkedIn connections at this company">2nd</th>
       <th>Team</th>
       <th>Location</th>
+      <th>Comp.</th>
     </tr>
   </thead>
   <tbody>
@@ -128,6 +129,7 @@ TEMPLATE = """\
       </td>
       <td class="cell">{{ job.team or "" }}</td>
       <td class="cell">{{ job.location or "" }}</td>
+      <td class="cell">{{ job.comp or "" }}</td>
     </tr>
     {% endfor %}
   </tbody>

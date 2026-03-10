@@ -16,12 +16,31 @@ def _html_to_text(raw: str) -> str:
     return soup.get_text(separator="\n", strip=True)
 
 
+def _format_pay(ranges: list[dict]) -> str | None:
+    if not ranges:
+        return None
+    parts = []
+    for r in ranges:
+        lo = r.get("min_cents")
+        hi = r.get("max_cents")
+        currency = r.get("currency_type", "USD")
+        if lo is None and hi is None:
+            continue
+        tokens = []
+        if lo is not None:
+            tokens.append(f"{currency} {lo / 100:,.0f}")
+        if hi is not None:
+            tokens.append(f"{currency} {hi / 100:,.0f}")
+        parts.append(" - ".join(tokens))
+    return " | ".join(parts) if parts else None
+
+
 def scrape_board(token: str):
     """Return a scrape function for a Greenhouse board."""
 
     async def scrape(http: Http) -> AsyncIterator[Job]:
         now = datetime.now(timezone.utc).isoformat()
-        url = f"https://boards-api.greenhouse.io/v1/boards/{token}/jobs?content=true"
+        url = f"https://boards-api.greenhouse.io/v1/boards/{token}/jobs?content=true&pay_transparency=true"
         body = await http.get(url)
         data = json.loads(body)
         for posting in data.get("jobs", []):
@@ -41,6 +60,9 @@ def scrape_board(token: str):
             updated = posting.get("updated_at")
             posted = updated[:10] if updated else None
 
+            pay_ranges = posting.get("pay_input_ranges", [])
+            comp = _format_pay(pay_ranges)
+
             h = job_hash(title, company, description)
             yield Job(
                 hash=h,
@@ -49,7 +71,7 @@ def scrape_board(token: str):
                 team=team,
                 url=post_url,
                 posted=posted,
-                comp=None,
+                comp=comp,
                 location=location,
                 description=description,
                 source=f"greenhouse:{token}",
