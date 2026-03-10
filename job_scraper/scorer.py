@@ -16,27 +16,6 @@ from job_scraper.models import Job
 
 logger = logging.getLogger(__name__)
 
-RESPONSE_SCHEMA: dict[str, object] = {
-    "type": "object",
-    "properties": {
-        "scores": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "hash": {"type": "string"},
-                    "why": {"type": "string"},
-                    "score": {"type": "number"},
-                },
-                "required": ["hash", "why", "score"],
-                "additionalProperties": False,
-            },
-        },
-    },
-    "required": ["scores"],
-    "additionalProperties": False,
-}
-
 
 async def score_batch(
     jobs: list[Job],
@@ -73,7 +52,26 @@ async def score_batch(
             output_config=OutputConfigParam(
                 format=JSONOutputFormatParam(
                     type="json_schema",
-                    schema=RESPONSE_SCHEMA,
+                    schema={
+                        "type": "object",
+                        "properties": {
+                            "scores": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "hash": {"type": "string"},
+                                        "why": {"type": "string"},
+                                        "score": {"type": "number"},
+                                    },
+                                    "required": ["hash", "why", "score"],
+                                    "additionalProperties": False,
+                                },
+                            },
+                        },
+                        "required": ["scores"],
+                        "additionalProperties": False,
+                    },
                 ),
             ),
         )
@@ -121,8 +119,7 @@ async def score_jobs(
 
     if to_score:
         batches = [
-            to_score[i : i + batch_size]
-            for i in range(0, len(to_score), batch_size)
+            to_score[i : i + batch_size] for i in range(0, len(to_score), batch_size)
         ]
         logger.info(
             "Scoring %d jobs (%d cached, %d batches)...",
@@ -150,9 +147,7 @@ async def score_jobs(
             logger.info("Batch %d: done", batch_num)
             return scores
 
-        batch_tasks = [
-            run_batch(i + 1, batch) for i, batch in enumerate(batches)
-        ]
+        batch_tasks = [run_batch(i + 1, batch) for i, batch in enumerate(batches)]
         for batch_scores in await asyncio.gather(*batch_tasks):
             results.update(batch_scores)
 
