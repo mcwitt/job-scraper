@@ -291,8 +291,11 @@ def run(
     ] = "title,company,team",
 ) -> None:
     """Scrape and score job postings."""
-    logging.basicConfig(format="%(message)s")
-    logging.getLogger("job_scraper").setLevel(logging.INFO)
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    pkg = logging.getLogger("job_scraper")
+    pkg.addHandler(handler)
+    pkg.setLevel(logging.INFO)
     if dedup_fields:
         fields: tuple[str, ...] = tuple(
             f.strip() for f in dedup_fields.split(",")
