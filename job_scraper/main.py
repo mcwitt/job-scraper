@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
+import dacite
 import httpx
 import typer
 
@@ -19,34 +20,31 @@ logger = logging.getLogger("job_scraper.main")
 app = typer.Typer()
 
 
-async def _run(
+def _load_jobs(path: Path) -> list[Job]:
+    """Load Job objects from a JSONL file."""
+    jobs: list[Job] = []
+    with path.open() as f:
+        for line in f:
+            jobs.append(dacite.from_dict(Job, json.loads(line)))
+    logger.info("loaded jobs count=%d path=%s", len(jobs), path)
+    return jobs
+
+
+async def _scrape(
+    boards_path: Path,
     cache_dir: Path,
     output_dir: Path,
     scrape_ttl: int,
-    batch_size: int,
-    model: str,
-    profile_path: Path,
     max_concurrent: int,
-    skip_score: bool,
-    report: bool,
-    keywords_path: Path,
-    top_k: int,
-    linkedin_dir: Path,
-    dedup_fields: tuple[str, ...],
-    resume_path: Path,
-) -> None:
+) -> list[Job]:
+    """Run scrape phase: discover → scrape → write jobs_raw.jsonl."""
     scrape_cache_path = cache_dir / "scrape.jsonl"
-    score_cache_path = cache_dir / "score_interest.jsonl"
-    output_path = output_dir / "jobs.jsonl"
-
-    output_dir.mkdir(parents=True, exist_ok=True)
-
     semaphore = asyncio.Semaphore(max_concurrent)
 
-    scrapers = discover()
+    scrapers = discover(boards_path)
     if not scrapers:
         logger.warning("no scrapers found")
-        return
+        return []
     logger.info(
         "discovered scrapers count=%d names=%s",
         len(scrapers),
@@ -60,11 +58,12 @@ async def _run(
         cache_get, cache_put = scrape_cache
         http = Http(client, cache_get, cache_put, semaphore)
 
-        # Scrape all sources concurrently
         all_jobs: list[Job] = []
         errors: list[dict] = []
 
-        async def collect(name: str, fn: ScrapeFn, h: Http) -> list[Job]:
+        async def collect(
+            name: str, fn: ScrapeFn, h: Http
+        ) -> list[Job]:
             try:
                 jobs = []
                 async for job in fn(h):
@@ -107,136 +106,176 @@ async def _run(
                 "scrapers_failed=%d path=%s", len(errors), errors_path
             )
 
-        # Write raw scraped jobs before filtering
-        raw_path = output_dir / "jobs_raw.jsonl"
-        with raw_path.open("w") as f:
-            for job in all_jobs:
-                f.write(json.dumps(to_dict(job)) + "\n")
-        logger.info("wrote raw jobs count=%d path=%s", len(all_jobs), raw_path)
+    raw_path = output_dir / "jobs_raw.jsonl"
+    with raw_path.open("w") as f:
+        for job in all_jobs:
+            f.write(json.dumps(to_dict(job)) + "\n")
+    logger.info("wrote raw jobs count=%d path=%s", len(all_jobs), raw_path)
 
-        # FTS5 relevance scoring
-        queries = parse_query(keywords_path.read_text())
-        scored_rel = score_relevance(queries, all_jobs)
+    return all_jobs
 
-        # Write all jobs with relevance (observability)
-        rel_path = output_dir / "jobs_relevance.jsonl"
-        with rel_path.open("w") as f:
-            for job, rel in scored_rel:
-                d = to_dict(job)
-                d["relevance"] = round(rel, 4)
-                f.write(json.dumps(d) + "\n")
-        logger.info(
-            "wrote relevance scores count=%d path=%s",
-            len(scored_rel),
-            rel_path,
+
+async def _run(
+    cache_dir: Path,
+    output_dir: Path,
+    scrape_ttl: int,
+    batch_size: int,
+    model: str,
+    profile_path: Path,
+    max_concurrent: int,
+    skip_score: bool,
+    report: bool,
+    keywords_path: Path,
+    top_k: int,
+    linkedin_dir: Path,
+    dedup_fields: tuple[str, ...],
+    resume_path: Path,
+    boards_path: Path = Path("boards.toml"),
+    scrape_only: bool = False,
+    input_jobs: Path | None = None,
+) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # --- Obtain raw jobs ---
+    if input_jobs is not None:
+        all_jobs = _load_jobs(input_jobs)
+    else:
+        all_jobs = await _scrape(
+            boards_path, cache_dir, output_dir, scrape_ttl, max_concurrent
         )
-
-        logger.info("relevance total=%d top_k=%d", len(all_jobs), top_k)
-
-        # Deduplicate by selected fields (before top-k truncation)
-        passing = scored_rel
-        if dedup_fields:
-            seen: dict[tuple[str | None, ...], int] = {}
-            deduped: list[tuple[Job, float]] = []
-            for job, rel in passing:
-                key = tuple(getattr(job, f) for f in dedup_fields)
-                if key not in seen:
-                    seen[key] = len(deduped)
-                    deduped.append((job, rel))
-            logger.info(
-                "dedup unique=%d fields=%s",
-                len(deduped),
-                ",".join(dedup_fields),
-            )
-            passing = deduped
-
-        passing = passing[:top_k]
-        unique_jobs = [j for j, _ in passing]
-
-        if skip_score:
-            # Write unsorted jobs
-            with output_path.open("w") as f:
-                for job in unique_jobs:
-                    f.write(json.dumps(to_dict(job)) + "\n")
-            logger.info(
-                "wrote jobs count=%d path=%s", len(unique_jobs), output_path
-            )
+        if scrape_only:
             return
 
-        # Score
-        profile_text = profile_path.read_text()
-        if not profile_text.strip():
-            logger.warning("profile is empty path=%s", profile_path)
+    if not all_jobs:
+        logger.warning("no jobs to process")
+        return
 
-        import anthropic
+    score_cache_path = cache_dir / "score_interest.jsonl"
+    output_path = output_dir / "jobs.jsonl"
 
-        from job_scraper.models import Score, ScoredJob, scored_job
-        from job_scraper.scorer import (
-            score_fit,
-            score_interest,
+    # FTS5 relevance scoring
+    queries = parse_query(keywords_path.read_text())
+    scored_rel = score_relevance(queries, all_jobs)
+
+    # Write all jobs with relevance (observability)
+    rel_path = output_dir / "jobs_relevance.jsonl"
+    with rel_path.open("w") as f:
+        for job, rel in scored_rel:
+            d = to_dict(job)
+            d["relevance"] = round(rel, 4)
+            f.write(json.dumps(d) + "\n")
+    logger.info(
+        "wrote relevance scores count=%d path=%s",
+        len(scored_rel),
+        rel_path,
+    )
+
+    logger.info("relevance total=%d top_k=%d", len(all_jobs), top_k)
+
+    # Deduplicate by selected fields (before top-k truncation)
+    passing = scored_rel
+    if dedup_fields:
+        seen: dict[tuple[str | None, ...], int] = {}
+        deduped: list[tuple[Job, float]] = []
+        for job, rel in passing:
+            key = tuple(getattr(job, f) for f in dedup_fields)
+            if key not in seen:
+                seen[key] = len(deduped)
+                deduped.append((job, rel))
+        logger.info(
+            "dedup unique=%d fields=%s",
+            len(deduped),
+            ",".join(dedup_fields),
+        )
+        passing = deduped
+
+    passing = passing[:top_k]
+    unique_jobs = [j for j, _ in passing]
+
+    if skip_score:
+        # Write unsorted jobs
+        with output_path.open("w") as f:
+            for job in unique_jobs:
+                f.write(json.dumps(to_dict(job)) + "\n")
+        logger.info(
+            "wrote jobs count=%d path=%s", len(unique_jobs), output_path
+        )
+        return
+
+    # Score
+    profile_text = profile_path.read_text()
+    if not profile_text.strip():
+        logger.warning("profile is empty path=%s", profile_path)
+
+    import anthropic
+
+    from job_scraper.models import Score, ScoredJob, scored_job
+    from job_scraper.scorer import (
+        score_fit,
+        score_interest,
+    )
+
+    fit_cache_path = cache_dir / "score_fit.jsonl"
+    ai = anthropic.AsyncAnthropic()
+
+    async with open_cache(score_cache_path) as interest_cache:
+        logger.info("scoring phase=interest")
+        interest_scores = await score_interest(
+            unique_jobs,
+            profile_text,
+            ai,
+            model,
+            batch_size,
+            interest_cache,
         )
 
-        fit_cache_path = cache_dir / "score_fit.jsonl"
-        ai = anthropic.AsyncAnthropic()
+    resume_text = resume_path.read_text()
+    async with open_cache(fit_cache_path) as fit_cache:
+        logger.info("scoring phase=fit")
+        fit_scores = await score_fit(
+            unique_jobs,
+            resume_text,
+            ai,
+            model,
+            batch_size,
+            fit_cache,
+        )
 
-        async with open_cache(score_cache_path) as interest_cache:
-            logger.info("scoring phase=interest")
-            interest_scores = await score_interest(
-                unique_jobs,
-                profile_text,
-                ai,
-                model,
-                batch_size,
-                interest_cache,
+    # Merge into ScoredJob objects
+    scored = []
+    for job in unique_jobs:
+        interest = interest_scores.get(job.hash)
+        if interest is None:
+            continue
+        fit = fit_scores.get(job.hash)
+        scored.append(
+            scored_job(
+                job,
+                score_interest=Score(*interest),
+                score_fit=Score(*fit) if fit else None,
             )
+        )
 
-        resume_text = resume_path.read_text()
-        async with open_cache(fit_cache_path) as fit_cache:
-            logger.info("scoring phase=fit")
-            fit_scores = await score_fit(
-                unique_jobs,
-                resume_text,
-                ai,
-                model,
-                batch_size,
-                fit_cache,
-            )
+    # Sort by priority (candidate * recruiter) descending
+    def _priority(j: ScoredJob) -> float:
+        fv = j.score_fit.value if j.score_fit else j.score_interest.value
+        return j.score_interest.value * fv
 
-        # Merge into ScoredJob objects
-        scored = []
-        for job in unique_jobs:
-            interest = interest_scores.get(job.hash)
-            if interest is None:
-                continue
-            fit = fit_scores.get(job.hash)
-            scored.append(
-                scored_job(
-                    job,
-                    score_interest=Score(*interest),
-                    score_fit=Score(*fit) if fit else None,
-                )
-            )
+    scored.sort(key=_priority, reverse=True)
 
-        # Sort by priority (candidate * recruiter) descending
-        def _priority(j: ScoredJob) -> float:
-            fv = j.score_fit.value if j.score_fit else j.score_interest.value
-            return j.score_interest.value * fv
+    with output_path.open("w") as f:
+        for job in scored:
+            f.write(json.dumps(to_dict(job)) + "\n")
+    logger.info("wrote scored jobs count=%d path=%s", len(scored), output_path)
 
-        scored.sort(key=_priority, reverse=True)
+    if report:
+        from job_scraper.linkedin import load as load_linkedin
+        from job_scraper.report import render_report
 
-        with output_path.open("w") as f:
-            for job in scored:
-                f.write(json.dumps(to_dict(job)) + "\n")
-        logger.info("wrote scored jobs count=%d path=%s", len(scored), output_path)
-
-        if report:
-            from job_scraper.linkedin import load as load_linkedin
-            from job_scraper.report import render_report
-
-            lookup = load_linkedin(linkedin_dir)
-            report_path = output_dir / "report.html"
-            render_report(scored, report_path, lookup=lookup)
-            logger.info("wrote report path=%s", report_path)
+        lookup = load_linkedin(linkedin_dir)
+        report_path = output_dir / "report.html"
+        render_report(scored, report_path, lookup=lookup)
+        logger.info("wrote report path=%s", report_path)
 
 
 @app.command()
@@ -283,8 +322,23 @@ def run(
         str,
         typer.Option(help="Comma-separated Job fields for dedup"),
     ] = "title,company,team",
+    boards: Annotated[
+        Path, typer.Option(help="Path to boards.toml")
+    ] = Path("boards.toml"),
+    scrape_only: Annotated[
+        bool,
+        typer.Option("--scrape-only", help="Scrape only, write jobs_raw.jsonl"),
+    ] = False,
+    input_jobs: Annotated[
+        Path | None,
+        typer.Option(help="Skip scrape, read raw jobs from JSONL file"),
+    ] = None,
 ) -> None:
     """Scrape and score job postings."""
+    if scrape_only and input_jobs is not None:
+        raise typer.BadParameter(
+            "--scrape-only and --input-jobs are mutually exclusive"
+        )
     logging.basicConfig(
         format="%(asctime)s %(levelname)s %(message)s",
         datefmt="%H:%M:%S",
@@ -318,6 +372,9 @@ def run(
             linkedin_dir=linkedin_dir,
             dedup_fields=fields,
             resume_path=resume,
+            boards_path=boards,
+            scrape_only=scrape_only,
+            input_jobs=input_jobs,
         )
     )
 

@@ -70,6 +70,38 @@
         }
       );
 
+      packages = forEachSystem (
+        system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+          python = pythonFor system;
+        in
+        {
+          default =
+            let
+              wrapper = pkgs.writeShellScript "job-scraper" ''
+                export PYTHONPATH="@lib@:''${PYTHONPATH:+:$PYTHONPATH}"
+                exec ${python}/bin/python -m job_scraper.main "$@"
+              '';
+            in
+            pkgs.stdenvNoCC.mkDerivation {
+              name = "job-scraper";
+              src = ./job_scraper;
+              dontBuild = true;
+              installPhase = ''
+                mkdir -p $out/lib/job_scraper
+                cp -r $src/* $out/lib/job_scraper/
+                mkdir -p $out/bin
+                substitute ${wrapper} $out/bin/job-scraper \
+                  --replace-fail '@lib@' "$out/lib"
+                chmod +x $out/bin/job-scraper
+              '';
+            };
+        }
+      );
+
+      nixosModules.default = import ./nix/module.nix self;
+
       # Enter a development shell with `nix develop`.
       # The hooks will be installed automatically.
       # Or run pre-commit manually with `nix develop -c pre-commit run --all-files`
