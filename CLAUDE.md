@@ -5,7 +5,7 @@ Scrape job postings from ATS platforms, score them against a candidate profile u
 ## Quick start
 
 ```bash
-# Scrape all discovered sources + BM25 relevance filter only (no LLM scoring)
+# Scrape all discovered sources + FTS5 relevance filter only (no LLM scoring)
 python -m job_scraper.main --skip-score
 
 # Full pipeline (requires ANTHROPIC_API_KEY)
@@ -14,11 +14,11 @@ python -m job_scraper.main
 
 ## Architecture
 
-**Pipeline:** scrape → BM25 relevance filter → dedupe → LLM score → sort → output
+**Pipeline:** scrape → FTS5 relevance filter → dedupe → LLM score → sort → output
 
 Key files:
 - `job_scraper/main.py` — CLI (Typer) and pipeline orchestration
-- `job_scraper/relevance.py` — BM25 relevance scoring against keywords.txt
+- `job_scraper/relevance.py` — FTS5 relevance scoring against keywords.txt
 - `job_scraper/scorer.py` — Claude scoring with extended thinking and structured output
 - `job_scraper/cache.py` — JSONL append-log cache with TTL
 - `job_scraper/models.py` — Job/ScoredJob frozen dataclasses
@@ -28,7 +28,7 @@ Key files:
 - `job_scraper/scraper/greenhouse.py` — Greenhouse `scrape_board()` factory
 - `job_scraper/scraper/ashby.py` — Ashby `scrape_board()` factory
 - `job_scraper/scraper/lever.py` — Lever `scrape_board()` factory
-- `keywords.txt` — BM25 query terms (one per line, `#` comments); copy from `keywords.example.txt`
+- `keywords.txt` — FTS5 query groups (`"phrases"`, `AND`/`OR`/`NOT`, `---` group separators); copy from `keywords.example.txt`
 - `profile.md` — candidate profile for LLM scoring; copy from `profile.example.md`
 - `resume.md` — candidate resume for recruiter scoring; copy from `resume.example.md`
 
