@@ -138,6 +138,14 @@ async def score_jobs(
             for job in batch:
                 score_data = scores.get(job.hash)
                 if score_data is None:
+                    logger.warning(
+                        "Batch %d: LLM returned no score for"
+                        " %s (%s at %s)",
+                        batch_num,
+                        job.hash[:12],
+                        job.title,
+                        job.company,
+                    )
                     continue
                 score, why = score_data
                 cache_put(
