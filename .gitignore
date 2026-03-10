@@ -6,3 +6,8 @@ result
 
 data/
 linkedin/
+
+# Personal config (copy from *.example.* and customize)
+profile.md
+keywords.txt
+resume.md
