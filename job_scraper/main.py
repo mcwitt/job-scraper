@@ -35,7 +35,7 @@ async def _run(
     resume_path: Path,
 ) -> None:
     scrape_cache_path = cache_dir / "scrape.jsonl"
-    score_cache_path = cache_dir / "scores.jsonl"
+    score_cache_path = cache_dir / "fit_candidate.jsonl"
     output_path = output_dir / "jobs.jsonl"
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -48,7 +48,7 @@ async def _run(
         return
     print(
         f"Discovered {len(scrapers)} scrapers: "
-        f"{', '.join(name for name, _ in scrapers)}"
+        f"{', '.join(name for name, _, _ in scrapers)}"
     )
 
     async with (
@@ -61,15 +61,26 @@ async def _run(
         # Scrape all sources concurrently
         all_jobs: list[Job] = []
 
-        async def collect(name: str, fn: ScrapeFn) -> list[Job]:
+        async def collect(name: str, fn: ScrapeFn, h: Http) -> list[Job]:
             jobs = []
-            async for job in fn(http):
+            async for job in fn(h):
                 jobs.append(job)
             print(f"  {name}: {len(jobs)} jobs")
             return jobs
 
         async with asyncio.TaskGroup() as tg:
-            tasks = [tg.create_task(collect(name, fn)) for name, fn in scrapers]
+            tasks = [
+                tg.create_task(
+                    collect(
+                        name,
+                        fn,
+                        dataclasses.replace(http, cache_ttl=ttl)
+                        if ttl is not None
+                        else http,
+                    )
+                )
+                for name, fn, ttl in scrapers
+            ]
 
         for task in tasks:
             all_jobs.extend(task.result())

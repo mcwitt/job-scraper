@@ -8,14 +8,16 @@ from job_scraper.scraper._http import Http
 type ScrapeFn = Callable[[Http], AsyncIterator[Job]]
 
 
-def discover() -> list[tuple[str, ScrapeFn]]:
-    """Scan this directory for scraper modules and return (name, scrape) pairs.
+def discover() -> list[tuple[str, ScrapeFn, float | None]]:
+    """Scan this directory for scraper modules.
 
-    A scraper module is any `.py` file in this directory whose name does
-    not start with ``_``.  Each must export an async ``scrape`` function.
+    Returns (name, scrape, cache_ttl) triples.  A scraper module is any
+    `.py` file in this directory whose name does not start with ``_``.
+    Each must export an async ``scrape`` function and may optionally
+    export a ``cache_ttl`` float (seconds).
     """
     pkg_dir = Path(__file__).parent
-    scrapers: list[tuple[str, ScrapeFn]] = []
+    scrapers: list[tuple[str, ScrapeFn, float | None]] = []
     for p in sorted(pkg_dir.glob("*.py")):
         if p.name.startswith("_"):
             continue
@@ -24,5 +26,6 @@ def discover() -> list[tuple[str, ScrapeFn]]:
         fn = getattr(mod, "scrape", None)
         if fn is None:
             continue
-        scrapers.append((mod_name, fn))
+        ttl: float | None = getattr(mod, "cache_ttl", None)
+        scrapers.append((mod_name, fn, ttl))
     return scrapers
