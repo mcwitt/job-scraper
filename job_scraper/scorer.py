@@ -112,7 +112,7 @@ async def score_batch(
     async with semaphore:
         response = await client.messages.create(
             model=model,
-            max_tokens=8192,
+            max_tokens=16384,
             thinking={"type": "enabled", "budget_tokens": 4096},
             system=system_prompt.format(profile=profile),
             messages=[{"role": "user", "content": user_msg}],
