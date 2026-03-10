@@ -36,7 +36,7 @@ async def _run(
     resume_path: Path,
 ) -> None:
     scrape_cache_path = cache_dir / "scrape.jsonl"
-    score_cache_path = cache_dir / "fit_candidate.jsonl"
+    score_cache_path = cache_dir / "score_interest.jsonl"
     output_path = output_dir / "jobs.jsonl"
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -181,51 +181,51 @@ async def _run(
             score_interest,
         )
 
-        recruiter_cache_path = cache_dir / "fit_recruiter.jsonl"
+        fit_cache_path = cache_dir / "score_fit.jsonl"
         ai = anthropic.AsyncAnthropic()
 
-        async with open_cache(score_cache_path) as cand_cache:
+        async with open_cache(score_cache_path) as interest_cache:
             logger.info("scoring phase=interest")
-            cand_scores = await score_interest(
+            interest_scores = await score_interest(
                 unique_jobs,
                 profile_text,
                 ai,
                 model,
                 batch_size,
-                cand_cache,
+                interest_cache,
             )
 
         resume_text = resume_path.read_text()
-        async with open_cache(recruiter_cache_path) as rec_cache:
+        async with open_cache(fit_cache_path) as fit_cache:
             logger.info("scoring phase=fit")
-            rec_scores = await score_fit(
+            fit_scores = await score_fit(
                 unique_jobs,
                 resume_text,
                 ai,
                 model,
                 batch_size,
-                rec_cache,
+                fit_cache,
             )
 
         # Merge into ScoredJob objects
         scored = []
         for job in unique_jobs:
-            cand = cand_scores.get(job.hash)
-            if cand is None:
+            interest = interest_scores.get(job.hash)
+            if interest is None:
                 continue
-            rec = rec_scores.get(job.hash)
+            fit = fit_scores.get(job.hash)
             scored.append(
                 scored_job(
                     job,
-                    fit_candidate=Score(*cand),
-                    fit_recruiter=Score(*rec) if rec else None,
+                    score_interest=Score(*interest),
+                    score_fit=Score(*fit) if fit else None,
                 )
             )
 
         # Sort by priority (candidate * recruiter) descending
         def _priority(j: ScoredJob) -> float:
-            rv = j.fit_recruiter.value if j.fit_recruiter else j.fit_candidate.value
-            return j.fit_candidate.value * rv
+            fv = j.score_fit.value if j.score_fit else j.score_interest.value
+            return j.score_interest.value * fv
 
         scored.sort(key=_priority, reverse=True)
 
@@ -295,7 +295,6 @@ def run(
         datefmt="%H:%M:%S",
         level=logging.INFO,
     )
-    logging.getLogger("httpx").setLevel(logging.WARNING)
     if dedup_fields:
         fields: tuple[str, ...] = tuple(
             f.strip() for f in dedup_fields.split(",")
