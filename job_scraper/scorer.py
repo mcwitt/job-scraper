@@ -154,7 +154,7 @@ async def score_jobs(
     return results
 
 
-async def score_candidate(
+async def score_interest(
     jobs: list[Job],
     profile: str,
     client: anthropic.AsyncAnthropic,
@@ -174,21 +174,37 @@ async def score_candidate(
         batch_size,
         cache,
         system_prompt="""\
-You are a job-matching assistant. Score each job posting
-against the candidate profile below.
+You are scoring job postings from the candidate's perspective — how
+excited and interested would this candidate be in this role?
 
-For each job, evaluate:
-- Skills alignment: how well the required skills match the candidate's experience
-- Role type fit: IC vs management, seniority level, domain
-- Location/remote compatibility
-- Compensation fit (if listed)
-- Red flags: dealbreakers, mismatches in values or preferences
+Consider:
+- **Strengths alignment**: Does the role leverage the candidate's
+  existing strengths in ways that would be engaging and rewarding?
+- **Growth opportunities**: Does the role offer development in areas
+  the candidate has expressed interest in, even if they lack formal
+  experience? A stated interest in compilers makes a compiler role
+  appealing regardless of professional experience.
+- **Role type fit**: IC vs management, seniority level, day-to-day
+  work matching the candidate's stated preferences.
+- **Company/team reputation**: Is the company or team well-regarded
+  in a field the candidate cares about?
+- **Compensation**: Does listed compensation (if any) fit the
+  candidate's expected band for their experience level?
+- **Location/remote**: Compatible with stated location preferences?
+- **Dealbreakers**: Anything that directly conflicts with stated
+  preferences (required relocation, management-only, etc.).
 
-Then return a score from 0.0-1.0:
-- 0.9-1.0: Exceptional match — strong alignment on skills, interests, and preferences
-- 0.7-0.89: Good match — mostly aligned, minor gaps
-- 0.4-0.69: Partial match — some relevant aspects but significant mismatches
-- 0.0-0.39: Poor match — does not align with the candidate's profile
+Key principle: weight the candidate's *aspirations and interests*
+heavily. A role in an area of strong stated interest should score
+well even without professional experience there. A role matching
+past experience but not stated interests should score lower.
+
+Score 0.0-1.0:
+- 0.9-1.0: Thrilled — strong alignment with strengths and growth
+  interests
+- 0.7-0.89: Genuinely appealing — good fit on most dimensions
+- 0.4-0.69: Mixed — some appeal but significant preference gaps
+- 0.0-0.39: Not interesting — poor alignment with what they want
 
 Write "why" as a brief justification before assigning the score.
 
@@ -200,7 +216,7 @@ Write "why" as a brief justification before assigning the score.
     )
 
 
-async def score_recruiter(
+async def score_fit(
     jobs: list[Job],
     resume: str,
     client: anthropic.AsyncAnthropic,
@@ -220,22 +236,39 @@ async def score_recruiter(
         batch_size,
         cache,
         system_prompt="""\
-You are a tech recruiter screening resumes. For each job posting,
-evaluate how likely you would move forward with this candidate
-for a recruiter screen.
+You are a diligent tech recruiter screening a candidate against job
+postings. For each role, assess how likely you would advance this
+candidate to a recruiter screen based on their resume.
 
-Consider:
-- Does the candidate meet the stated minimum qualifications?
-- Years of experience vs. what the role asks for
-- Keyword and technology overlap with the job description
-- Title / seniority alignment
-- Location or visa concerns (if stated)
+Go beyond simple keyword matching:
+- **Demonstrated experience**: Weight professional, on-the-job
+  experience far more heavily than stated interests or hobby
+  projects. Has the candidate *done this work* professionally?
+- **Institutional credibility**: Consider the reputation of
+  employers, academic institutions, and affiliations. Experience at
+  a recognized lab or company in the relevant field carries weight.
+- **Depth vs adjacency**: Distinguish deep expertise (years of
+  focused work) from adjacent experience (related but not directly
+  applicable). Years building ETL pipelines is deep data engineering
+  experience; stated interest in LLMs does not make an LLM engineer.
+- **Career trajectory**: Does the candidate's progression show a
+  clear path toward this role, or is this a significant pivot?
+  Pivots without supporting evidence are risky.
+- **Minimum qualifications**: Does the candidate meet stated
+  requirements (years of experience, technologies, degree)?
+- **Seniority alignment**: Does the candidate's level match?
+- **Location/visa**: Any logistical concerns?
+
+Key principle: assess what is *verifiable on paper*, not what the
+candidate aspires to. Stated interest without demonstrated
+experience should not significantly boost the score.
 
 Score 0.0-1.0:
-- 0.9-1.0: Strong match — would immediately schedule a screen
-- 0.7-0.89: Likely move forward — most requirements met
-- 0.4-0.69: Borderline — some gaps, might pass depending on pool
-- 0.0-0.39: Would not advance — significant mismatch on requirements
+- 0.9-1.0: Immediately schedule a screen — strong demonstrated fit
+- 0.7-0.89: Likely advance — most requirements clearly met on paper
+- 0.4-0.69: Borderline — some gaps, worth considering if pool thin
+- 0.0-0.39: Would not advance — significant gaps in demonstrated
+  experience
 
 Write "why" as a brief justification before assigning the score.
 
