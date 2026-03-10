@@ -82,7 +82,7 @@ TEMPLATE = """\
   <thead>
     <tr>
       <th class="narrow" title="Geometric mean of Interest and Fit scores">Score</th>
-      <th class="narrow" title="Interest to candidate">Int.</th>
+      <th class="narrow" title="Interest to candidate">Interest</th>
       <th class="narrow" title="Fit for role">Fit</th>
       <th data-sort-desc>Posted</th>
       <th>Title</th>
@@ -106,11 +106,13 @@ TEMPLATE = """\
           >{{ (score * 100) | round(0) | int }}</span>
       </td>
       <td class="narrow tip" data-sort="{{ cv }}">
-        {{ (cv * 100) | round(0) | int }}
+        <span class="score {{ score_class(cv) }}"
+          >{{ (cv * 100) | round(0) | int }}</span>
         <div class="tip-body">{{ job.fit_candidate.why }}</div>
       </td>
       <td class="narrow tip" data-sort="{{ rv }}">
-        {% if job.fit_recruiter is not none %}{{ (rv * 100) | round(0) | int }}
+        {% if job.fit_recruiter is not none %}<span class="score {{ score_class(rv) }}"
+          >{{ (rv * 100) | round(0) | int }}</span>
         <div class="tip-body">{{ job.fit_recruiter.why }}</div>
         {% endif %}
       </td>
@@ -179,7 +181,7 @@ document.addEventListener('click', function(e) {
 });
 (function() {
   var COLS = [
-    {name: 'Score', on: true}, {name: 'Int.', on: false},
+    {name: 'Score', on: true}, {name: 'Interest', on: false},
     {name: 'Fit', on: false}, {name: 'Posted', on: true},
     {name: 'Title', on: true}, {name: 'Company', on: true},
     {name: '1st', on: true}, {name: '2nd', on: true},
