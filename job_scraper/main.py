@@ -183,7 +183,7 @@ async def _run(
         ai = anthropic.AsyncAnthropic()
 
         async with open_cache(score_cache_path) as cand_cache:
-            logger.info("--- Candidate fit scoring ---")
+            logger.info("Scoring interest")
             cand_scores = await score_interest(
                 unique_jobs,
                 profile_text,
@@ -195,7 +195,7 @@ async def _run(
 
         resume_text = resume_path.read_text()
         async with open_cache(recruiter_cache_path) as rec_cache:
-            logger.info("--- Recruiter fit scoring ---")
+            logger.info("Scoring fit")
             rec_scores = await score_fit(
                 unique_jobs,
                 resume_text,
