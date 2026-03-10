@@ -1,6 +1,5 @@
 import json
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime
 
 from job_scraper.hash import job_hash
 from job_scraper.models import Job
@@ -11,11 +10,10 @@ def scrape_board(company: str, *, name: str):
     """Return a scrape function for a Gem job board."""
 
     async def scrape(http: Http) -> AsyncIterator[Job]:
-        now = datetime.now(UTC).isoformat()
         url = (
             f"https://api.gem.com/job_board/v0/{company}/job_posts/"
         )
-        body = await http.get(url)
+        body, scraped_at = await http.get(url)
         postings = json.loads(body)
         for posting in postings:
             title = posting.get("title", "")
@@ -43,7 +41,7 @@ def scrape_board(company: str, *, name: str):
                 location=location,
                 description=description,
                 source=f"gem:{company}",
-                scraped_at=now,
+                scraped_at=scraped_at,
             )
 
     return scrape

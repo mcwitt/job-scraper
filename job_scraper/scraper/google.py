@@ -37,7 +37,7 @@ def _slugify(title: str) -> str:
     return s.strip("-")
 
 
-def _build_job(entry: list, now: str) -> Job:
+def _build_job(entry: list, scraped_at: str) -> Job:
     job_id = entry[0]
     title = entry[1]
     company = entry[7] or "Google"
@@ -80,26 +80,24 @@ def _build_job(entry: list, now: str) -> Job:
         location=location,
         description=description,
         source="google",
-        scraped_at=now,
+        scraped_at=scraped_at,
     )
 
 
 async def scrape(http: Http) -> AsyncIterator[Job]:
-    now = datetime.now(UTC).isoformat()
-
     page = 1
     total: int | None = None
     count = 0
     while True:
         url = f"{_LIST}?page={page}"
-        body = await http.get(url)
+        body, scraped_at = await http.get(url)
         jobs, reported_total = _parse_page(body)
         if total is None:
             total = reported_total
         if not jobs:
             break
         for entry in jobs:
-            yield _build_job(entry, now)
+            yield _build_job(entry, scraped_at)
             count += 1
         page += 1
         if count >= (total or 0):

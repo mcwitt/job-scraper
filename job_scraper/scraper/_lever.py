@@ -26,9 +26,8 @@ def scrape_board(company: str, *, name: str):
     """Return a scrape function for a Lever job board."""
 
     async def scrape(http: Http) -> AsyncIterator[Job]:
-        now = datetime.now(UTC).isoformat()
         url = f"https://api.lever.co/v0/postings/{company}?mode=json"
-        body = await http.get(url)
+        body, scraped_at = await http.get(url)
         postings = json.loads(body)
         for posting in postings:
             title = posting.get("text", "")
@@ -63,7 +62,7 @@ def scrape_board(company: str, *, name: str):
                 location=location,
                 description=description,
                 source=f"lever:{company}",
-                scraped_at=now,
+                scraped_at=scraped_at,
             )
 
     return scrape

@@ -13,17 +13,16 @@ _PAGE_SIZE = 100
 
 
 async def scrape(http: Http) -> AsyncIterator[Job]:
-    now = datetime.now(UTC).isoformat()
-
     # Paginate the list endpoint to collect all job IDs + metadata
     listings: list[tuple[int, dict]] = []
+    scraped_at = ""
     start = 0
     while True:
         url = (
             f"{_API}?num={_PAGE_SIZE}&domain={_DOMAIN}"
             f"&sort_by=relevance&start={start}"
         )
-        body = await http.get(url)
+        body, scraped_at = await http.get(url)
         data = json.loads(body)
         positions = data.get("positions", [])
         if not positions:
@@ -37,7 +36,7 @@ async def scrape(http: Http) -> AsyncIterator[Job]:
     # Fetch each job's detail page for the full description
     for job_id, _meta in listings:
         detail_url = f"{_API}/{job_id}?domain={_DOMAIN}"
-        body = await http.get(detail_url)
+        body, _ = await http.get(detail_url)
         detail = json.loads(body)
 
         title = detail.get("name", "")
@@ -67,5 +66,5 @@ async def scrape(http: Http) -> AsyncIterator[Job]:
             location=location,
             description=description,
             source="netflix",
-            scraped_at=now,
+            scraped_at=scraped_at,
         )

@@ -1,7 +1,6 @@
 import logging
 import re
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime
 
 from job_scraper.hash import job_hash
 from job_scraper.models import Job
@@ -116,10 +115,8 @@ def _extract_jobs_js(chunk: str) -> list[dict[str, str]]:
 
 
 async def scrape(http: Http) -> AsyncIterator[Job]:
-    now = datetime.now(UTC).isoformat()
-
     # Step 1: fetch careers page to find the JS chunk URL
-    html = await http.get(_CAREERS_URL)
+    html, scraped_at = await http.get(_CAREERS_URL)
     chunk_match = _CHUNK_RE.search(html)
     if not chunk_match:
         logger.warning(
@@ -130,7 +127,7 @@ async def scrape(http: Http) -> AsyncIterator[Job]:
     chunk_url = f"https://kronosai.co{chunk_match.group(0)}"
 
     # Step 2: fetch and parse the JS chunk
-    chunk_js = await http.get(chunk_url)
+    chunk_js, _ = await http.get(chunk_url)
     jobs = _extract_jobs_js(chunk_js)
     for job in jobs:
         title = job["title"]
@@ -149,5 +146,5 @@ async def scrape(http: Http) -> AsyncIterator[Job]:
             location=location,
             description=description,
             source="kronosai",
-            scraped_at=now,
+            scraped_at=scraped_at,
         )

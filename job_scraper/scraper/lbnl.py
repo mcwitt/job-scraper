@@ -1,6 +1,6 @@
 import re
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime
+from datetime import datetime
 
 from bs4 import BeautifulSoup
 
@@ -29,8 +29,7 @@ def _parse_date(raw: str) -> str | None:
 
 
 async def scrape(http: Http) -> AsyncIterator[Job]:
-    now = datetime.now(UTC).isoformat()
-    html = await http.get(_LIST_URL)
+    html, scraped_at = await http.get(_LIST_URL)
     soup = BeautifulSoup(html, "lxml")
 
     rows = soup.select("[id^='job_list_']")
@@ -53,7 +52,7 @@ async def scrape(http: Http) -> AsyncIterator[Job]:
         posted = _parse_date(date_el.get_text(strip=True)) if date_el else None
 
         # Fetch detail page for full description
-        detail_html = await http.get(url)
+        detail_html, _ = await http.get(url)
         detail_soup = BeautifulSoup(detail_html, "lxml")
         desc_el = detail_soup.select_one(".job_description")
         description = (
@@ -72,5 +71,5 @@ async def scrape(http: Http) -> AsyncIterator[Job]:
             location=location,
             description=description,
             source="lbnl",
-            scraped_at=now,
+            scraped_at=scraped_at,
         )
