@@ -20,7 +20,8 @@ TEMPLATE = """\
   table { width: 100%; border-collapse: collapse; background: white;
     border-radius: 8px; overflow: hidden;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-  th, td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid #eee; }
+  table { font-size: 0.85em; }
+  th, td { padding: 0.4rem 0.6rem; text-align: left; border-bottom: 1px solid #eee; }
   th { background: #fafafa; font-weight: 600; position: sticky; top: 0;
     cursor: pointer; user-select: none; white-space: nowrap; }
   th::after { content: ""; display: inline-block; width: 0.6em; margin-left: 0.3em; }
@@ -29,9 +30,10 @@ TEMPLATE = """\
   tr:hover { background: #f9f9f9; }
   a { color: #0066cc; text-decoration: none; }
   a:hover { text-decoration: underline; }
-  .score { font-weight: 700; padding: 0.25rem 0.5rem;
-    border-radius: 4px; display: inline-block;
-    min-width: 2.5rem; text-align: center; }
+  .narrow { padding-left: 0.3rem; padding-right: 0.3rem;
+    text-align: center; white-space: nowrap; }
+  .score { font-weight: 700; padding: 0.15rem 0.35rem;
+    border-radius: 4px; display: inline-block; text-align: center; }
   .score-high { background: #d4edda; color: #155724; }
   .score-mid { background: #fff3cd; color: #856404; }
   .score-low { background: #f8d7da; color: #721c24; }
@@ -55,15 +57,33 @@ TEMPLATE = """\
   .age-fresh { font-weight: 700; padding: 0.25rem 0.5rem;
     border-radius: 4px; background: #d4edda; color: #155724; }
   .meta { font-size: 0.85em; color: #777; }
+  .col-toggle { position: relative; display: inline-block; margin-bottom: 1rem; }
+  .col-toggle button { font: inherit; font-size: 0.85em; padding: 0.35rem 0.7rem;
+    background: white; border: 1px solid #ccc; border-radius: 6px; cursor: pointer; }
+  .col-toggle button:hover { background: #f0f0f0; }
+  .col-panel { display: none; position: absolute; left: 0; top: 100%;
+    margin-top: 0.3rem; z-index: 20; background: white; border: 1px solid #ddd;
+    border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    padding: 0.5rem 0; min-width: 150px; }
+  .col-panel.open { display: block; }
+  .col-panel label { display: block; padding: 0.25rem 0.75rem; font-size: 0.85em;
+    cursor: pointer; white-space: nowrap; }
+  .col-panel label:hover { background: #f5f5f5; }
 </style>
 </head>
 <body>
 <h1>Job Scraper Report</h1>
 <p class="meta" style="margin-bottom: 1rem;">{{ jobs | length }} jobs scored</p>
+<div class="col-toggle">
+  <button id="col-btn">Columns &#9662;</button>
+  <div class="col-panel" id="col-panel"></div>
+</div>
 <table>
   <thead>
     <tr>
-      <th title="Geometric mean of Candidate and Recruiter scores">Score</th>
+      <th class="narrow" title="Geometric mean of Interest and Fit scores">Score</th>
+      <th class="narrow" title="Interest to candidate">Int.</th>
+      <th class="narrow" title="Fit for role">Fit</th>
       <th data-sort-desc>Posted</th>
       <th>Title</th>
       <th>Company</th>
@@ -81,17 +101,18 @@ TEMPLATE = """\
     {% set score = (cv * rv) ** 0.5 %}
     {% set first, second = lookup(job.company) %}
     <tr>
-      <td class="tip" data-sort="{{ score }}">
+      <td class="narrow" data-sort="{{ score }}">
         <span class="score {{ score_class(score) }}"
           >{{ (score * 100) | round(0) | int }}</span>
-        <dl class="tip-body">
-          <dt>Candidate: {{ (cv * 100) | round(0) | int }}</dt>
-          <dd>{{ job.fit_candidate.why }}</dd>
-          {% if job.fit_recruiter is not none %}
-          <dt>Recruiter: {{ (rv * 100) | round(0) | int }}</dt>
-          <dd>{{ job.fit_recruiter.why }}</dd>
-          {% endif %}
-        </dl>
+      </td>
+      <td class="narrow tip" data-sort="{{ cv }}">
+        {{ (cv * 100) | round(0) | int }}
+        <div class="tip-body">{{ job.fit_candidate.why }}</div>
+      </td>
+      <td class="narrow tip" data-sort="{{ rv }}">
+        {% if job.fit_recruiter is not none %}{{ (rv * 100) | round(0) | int }}
+        <div class="tip-body">{{ job.fit_recruiter.why }}</div>
+        {% endif %}
       </td>
       <td class="date" data-sort="{{ epoch(job.posted) }}">{% if job.posted %}
         <span class="age {{ date_class(job.posted) }}"
@@ -147,11 +168,64 @@ document.querySelectorAll('.tip').forEach(function(el) {
     e.stopPropagation();
   });
 });
-document.addEventListener('click', function() {
+document.addEventListener('click', function(e) {
   document.querySelectorAll('.tip.active').forEach(function(t) {
     t.classList.remove('active');
   });
+  var toggle = document.querySelector('.col-toggle');
+  if (!toggle.contains(e.target)) {
+    document.getElementById('col-panel').classList.remove('open');
+  }
 });
+(function() {
+  var COLS = [
+    {name: 'Score', on: true}, {name: 'Int.', on: false},
+    {name: 'Fit', on: false}, {name: 'Posted', on: true},
+    {name: 'Title', on: true}, {name: 'Company', on: true},
+    {name: '1st', on: true}, {name: '2nd', on: true},
+    {name: 'Team', on: false}, {name: 'Location', on: true},
+    {name: 'Comp.', on: true}
+  ];
+  var KEY = 'job-scraper-cols';
+  var saved = null;
+  try { saved = JSON.parse(localStorage.getItem(KEY)); } catch(e) {}
+  if (saved && typeof saved === 'object') {
+    COLS.forEach(function(c) {
+      if (saved.hasOwnProperty(c.name)) c.on = saved[c.name];
+    });
+  }
+  var style = document.createElement('style');
+  document.head.appendChild(style);
+  function apply() {
+    var rules = [];
+    var state = {};
+    COLS.forEach(function(c, i) {
+      state[c.name] = c.on;
+      if (!c.on) {
+        var n = i + 1;
+        rules.push('th:nth-child(' + n + '),td:nth-child(' + n
+          + '){display:none}');
+      }
+    });
+    style.textContent = rules.join('');
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch(e) {}
+  }
+  var panel = document.getElementById('col-panel');
+  COLS.forEach(function(c, i) {
+    var lbl = document.createElement('label');
+    var cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.checked = c.on;
+    cb.addEventListener('change', function() { c.on = cb.checked; apply(); });
+    lbl.appendChild(cb);
+    lbl.appendChild(document.createTextNode(' ' + c.name));
+    panel.appendChild(lbl);
+  });
+  document.getElementById('col-btn').addEventListener('click', function(e) {
+    panel.classList.toggle('open');
+    e.stopPropagation();
+  });
+  apply();
+})();
 (function() {
   var table = document.querySelector('table');
   var thead = table.querySelector('thead');
