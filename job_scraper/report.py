@@ -41,10 +41,13 @@ TEMPLATE = """\
   .tip .tip-body { display: none; position: absolute; left: 0; top: 100%;
     z-index: 10; background: white; border: 1px solid #ddd;
     border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    padding: 0.75rem; min-width: 320px; max-width: 420px;
+    padding: 0.75rem; max-width: 420px;
     font-weight: normal; font-size: 0.85em; color: #333;
-    white-space: normal; }
+    white-space: normal; text-align: left; }
   .tip:hover .tip-body, .tip.active .tip-body { display: block; }
+  .tip-score .tip-body { min-width: 320px; }
+  .tip-body ul { margin: 0; padding-left: 1.2em; }
+  .tip-body li { margin: 0.15rem 0; }
   .tip-body dt { font-weight: 600; margin-top: 0.4rem; }
   .tip-body dt:first-child { margin-top: 0; }
   .tip-body dd { margin: 0.1rem 0 0 0; color: #555; }
@@ -101,7 +104,8 @@ TEMPLATE = """\
       <th title="2nd-degree LinkedIn connections at this company">2nd</th>
       <th>Team</th>
       <th>Location</th>
-      <th>Comp.</th>
+      <th>Compensation</th>
+      <th>Scraped</th>
     </tr>
   </thead>
   <tbody>
@@ -111,7 +115,7 @@ TEMPLATE = """\
     {% set score = (cv * rv) ** 0.5 %}
     {% set first, second = lookup(job.company) %}
     <tr>
-      <td class="narrow tip" data-sort="{{ score }}">
+      <td class="narrow tip tip-score" data-sort="{{ score }}">
         <span class="score {{ score_class(score) }}"
           >{{ (score * 100) | round(0) | int }}</span>
         <div class="tip-body">
@@ -123,12 +127,12 @@ TEMPLATE = """\
           {% endif %}
         </div>
       </td>
-      <td class="narrow tip" data-sort="{{ cv }}">
+      <td class="narrow tip tip-score" data-sort="{{ cv }}">
         <span class="score {{ score_class(cv) }}"
           >{{ (cv * 100) | round(0) | int }}</span>
         <div class="tip-body">{{ job.score_interest.why }}</div>
       </td>
-      <td class="narrow tip" data-sort="{{ rv }}">
+      <td class="narrow tip tip-score" data-sort="{{ rv }}">
         {% if job.score_fit is not none %}<span class="score {{ score_class(rv) }}"
           >{{ (rv * 100) | round(0) | int }}</span>
         <div class="tip-body">{{ job.score_fit.why }}</div>
@@ -145,10 +149,11 @@ TEMPLATE = """\
         {{- first | length or "" -}}
         {%- if first %}
         <div class="tip-body">
+        <ul>
         {%- for c in first %}
-          <a href="{{ c.url }}">{{ c.name }}</a>
-          {{- ", " if not loop.last -}}
+          <li><a href="{{ c.url }}">{{ c.name }}</a></li>
         {%- endfor %}
+        </ul>
         </div>
         {%- endif %}
       </td>
@@ -157,20 +162,25 @@ TEMPLATE = """\
         {{- n2 or "" -}}
         {%- if second %}
         <div class="tip-body">
+        <ul>
         {%- for g in second %}
-          <a href="{{ g.via.url }}">{{ g.via.name }}</a>:
-          {%- for c in g.connections %}
-          <a href="{{ c.url }}">{{ c.name }}</a>
-          {{- ", " if not loop.last -}}
-          {%- endfor %}
-          {{ "<br>" if not loop.last }}
+          <li><a href="{{ g.via.url }}">{{ g.via.name }}</a>
+            <ul>
+            {%- for c in g.connections %}
+              <li><a href="{{ c.url }}">{{ c.name }}</a></li>
+            {%- endfor %}
+            </ul>
+          </li>
         {%- endfor %}
+        </ul>
         </div>
         {%- endif %}
       </td>
       <td class="cell">{{ job.team or "" }}</td>
       <td class="cell">{{ job.location or "" }}</td>
       <td class="cell">{{ job.comp or "" }}</td>
+      <td class="date" data-sort="{{ epoch(job.scraped_at) }}"
+        title="{{ job.scraped_at }}">{{ time_ago(job.scraped_at) }}</td>
     </tr>
     {% endfor %}
   </tbody>
@@ -204,7 +214,8 @@ document.addEventListener('click', function(e) {
     {name: 'Title', on: true}, {name: 'Company', on: true},
     {name: '1st', on: true}, {name: '2nd', on: true},
     {name: 'Team', on: false}, {name: 'Location', on: true},
-    {name: 'Comp.', on: true}
+    {name: 'Compensation', on: true},
+    {name: 'Scraped', on: false}
   ];
   var KEY = 'job-scraper-cols';
   var saved = null;
@@ -251,7 +262,7 @@ document.addEventListener('click', function(e) {
   var thead = table.querySelector('thead');
   var tbody = table.querySelector('tbody');
   var ths = thead.querySelectorAll('th');
-  var PAGE_SIZE = 100;
+  var PAGE_SIZE = 50;
   var curPage = 0;
   var pgPrev = document.getElementById('pg-prev');
   var pgNext = document.getElementById('pg-next');

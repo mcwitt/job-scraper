@@ -2,6 +2,7 @@ import asyncio
 import json as json_mod
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -28,17 +29,26 @@ class Http:
     semaphore: asyncio.Semaphore
     cache_ttl: float | None = None
 
-    def _put(self, key: str, value: dict[str, Any]) -> None:
+    def _put(
+        self, key: str, value: dict[str, Any]
+    ) -> str:
+        now = datetime.now(UTC).isoformat()
+        value = {**value, "fetched_at": now}
         if self.cache_ttl is not None:
-            value = {**value, "_ttl": self.cache_ttl}
+            value["_ttl"] = self.cache_ttl
         self.cache_put(key, value)
+        return now
 
-    async def get(self, url: str) -> str:
+    async def get(self, url: str) -> tuple[str, str]:
+        """Return (body, fetched_at) for a GET request."""
         cached = self.cache_get(url)
         if cached is not None:
             if "error" in cached:
                 raise CachedHttpError(url, cached["error"])
-            return cached["body"]
+            fetched_at = cached.get("fetched_at") or datetime.now(
+                UTC
+            ).isoformat()
+            return cached["body"], fetched_at
         async with self.semaphore:
             try:
                 resp = await self.client.get(url)
@@ -50,18 +60,22 @@ class Http:
                 )
                 raise
             body = resp.text
-        self._put(url, {"body": body})
-        return body
+        fetched_at = self._put(url, {"body": body})
+        return body, fetched_at
 
     async def post(
         self, url: str, *, json: dict[str, Any]
-    ) -> str:
+    ) -> tuple[str, str]:
+        """Return (body, fetched_at) for a POST request."""
         key = f"POST {url} {json_mod.dumps(json, sort_keys=True)}"
         cached = self.cache_get(key)
         if cached is not None:
             if "error" in cached:
                 raise CachedHttpError(url, cached["error"])
-            return cached["body"]
+            fetched_at = cached.get("fetched_at") or datetime.now(
+                UTC
+            ).isoformat()
+            return cached["body"], fetched_at
         async with self.semaphore:
             try:
                 resp = await self.client.post(url, json=json)
@@ -73,5 +87,5 @@ class Http:
                 )
                 raise
             body = resp.text
-        self._put(key, {"body": body})
-        return body
+        fetched_at = self._put(key, {"body": body})
+        return body, fetched_at

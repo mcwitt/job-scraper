@@ -2,7 +2,6 @@ import asyncio
 import json
 import logging
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime
 
 from job_scraper.hash import job_hash
 from job_scraper.models import Job
@@ -24,13 +23,11 @@ def scrape_board(company: str, instance: str, site: str, *, name: str):
     jobs_url = f"{base}/wday/cxs/{company}/{site}/jobs"
 
     async def scrape(http: Http) -> AsyncIterator[Job]:
-        now = datetime.now(UTC).isoformat()
-
         # Phase 1: paginate listings via POST (cached)
         stubs: list[tuple[str, str, str | None]] = []
 
         try:
-            first_body = await http.post(
+            first_body, scraped_at = await http.post(
                 jobs_url,
                 json={
                     "limit": _PAGE_SIZE,
@@ -67,7 +64,7 @@ def scrape_board(company: str, instance: str, site: str, *, name: str):
         # Fetch remaining pages concurrently
         async def fetch_page(offset: int) -> list[dict]:
             try:
-                body = await http.post(
+                body, _ = await http.post(
                     jobs_url,
                     json={
                         "limit": _PAGE_SIZE,
@@ -106,7 +103,7 @@ def scrape_board(company: str, instance: str, site: str, *, name: str):
             nonlocal done
             url = f"{base}/wday/cxs/{company}/{site}{ext_path}"
             try:
-                body = await http.get(url)
+                body, _ = await http.get(url)
                 info = json.loads(body).get("jobPostingInfo", {})
                 desc_html = info.get("jobDescription", "")
                 desc = html_to_text(desc_html) if desc_html else ""
@@ -153,7 +150,7 @@ def scrape_board(company: str, instance: str, site: str, *, name: str):
                 location=location,
                 description=description,
                 source=f"workday:{company}",
-                scraped_at=now,
+                scraped_at=scraped_at,
             )
 
     return scrape

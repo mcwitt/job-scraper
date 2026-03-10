@@ -1,6 +1,5 @@
 import json
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime
 
 from job_scraper.hash import job_hash
 from job_scraper.models import Job
@@ -31,9 +30,8 @@ def scrape_board(token: str, *, name: str):
     """Return a scrape function for a Greenhouse board."""
 
     async def scrape(http: Http) -> AsyncIterator[Job]:
-        now = datetime.now(UTC).isoformat()
         url = f"https://boards-api.greenhouse.io/v1/boards/{token}/jobs?content=true&pay_transparency=true"
-        body = await http.get(url)
+        body, scraped_at = await http.get(url)
         data = json.loads(body)
         for posting in data.get("jobs", []):
             title = posting.get("title", "")
@@ -66,7 +64,7 @@ def scrape_board(token: str, *, name: str):
                 location=location,
                 description=description,
                 source=f"greenhouse:{token}",
-                scraped_at=now,
+                scraped_at=scraped_at,
             )
 
     return scrape
