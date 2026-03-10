@@ -31,9 +31,9 @@ async def score_batch(
         Dict mapping job hash to (score, why).
     """
     listings = []
-    for job in jobs:
+    for i, job in enumerate(jobs):
         listings.append(
-            f"### {job.hash}\n"
+            f"### {i}\n"
             f"**{job.title}** at **{job.company}**\n"
             f"Location: {job.location or 'Not specified'}\n"
             f"Team: {job.team or 'Not specified'}\n\n"
@@ -60,11 +60,11 @@ async def score_batch(
                                 "items": {
                                     "type": "object",
                                     "properties": {
-                                        "hash": {"type": "string"},
+                                        "id": {"type": "integer"},
                                         "why": {"type": "string"},
                                         "score": {"type": "number"},
                                     },
-                                    "required": ["hash", "why", "score"],
+                                    "required": ["id", "why", "score"],
                                     "additionalProperties": False,
                                 },
                             },
@@ -78,7 +78,11 @@ async def score_batch(
 
     text_block = next(b for b in response.content if isinstance(b, TextBlock))
     result = json.loads(text_block.text)
-    return {s["hash"]: (s["score"], s["why"]) for s in result["scores"]}
+    return {
+        jobs[s["id"]].hash: (s["score"], s["why"])
+        for s in result["scores"]
+        if 0 <= s["id"] < len(jobs)
+    }
 
 
 async def score_jobs(
