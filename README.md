@@ -99,6 +99,73 @@ All personal config files are gitignored. Copy from `*.example.*` to get started
 | `profile.md` | Free-form candidate profile for interest scoring |
 | `resume.md` | Candidate resume for recruiter-fit scoring |
 
+## NixOS deployment
+
+Add the flake as an input and import the module:
+
+```nix
+{
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
+    job-scraper.url = "github:you/job-scraper";
+  };
+
+  outputs = { nixpkgs, job-scraper, ... }: {
+    nixosConfigurations.myhost = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      modules = [
+        job-scraper.nixosModules.default
+        {
+          services.job-scraper = {
+            enable = true;
+            schedule = "daily";
+            anthropicApiKeyFile = "/run/secrets/anthropic-api-key";
+
+            boards = {
+              greenhouse = [
+                { board = "anthropic"; name = "Anthropic"; }
+              ];
+              ashby = [
+                { board = "openai"; name = "OpenAI"; }
+              ];
+            };
+
+            settings = {
+              model = "claude-haiku-4-5-20251001";
+              topK = 100;
+            };
+
+            users.alice = {
+              profile = builtins.readFile ./alice/profile.md;
+              resume = builtins.readFile ./alice/resume.md;
+              keywords = builtins.readFile ./alice/keywords.txt;
+            };
+
+            users.bob = {
+              profile = builtins.readFile ./bob/profile.md;
+              resume = builtins.readFile ./bob/resume.md;
+              keywords = builtins.readFile ./bob/keywords.txt;
+            };
+
+            nginx = {
+              enable = true;
+              hostName = "jobs.example.com";
+            };
+          };
+        }
+      ];
+    };
+  };
+}
+```
+
+This sets up:
+- A shared scrape phase running daily via systemd timer
+- Per-user scoring/reporting (Alice and Bob scored in parallel)
+- Nginx serving reports at `jobs.example.com/alice/` and `jobs.example.com/bob/`
+
+Trigger manually with `systemctl start job-scraper.service`.
+
 ## Development
 
 ```bash
