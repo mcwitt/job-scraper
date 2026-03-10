@@ -2,7 +2,6 @@ import asyncio
 import dataclasses
 import json
 import logging
-import statistics
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
@@ -31,8 +30,7 @@ async def _run(
     skip_score: bool,
     report: bool,
     keywords_path: Path,
-    min_relevance: float,
-    top_k: int | None,
+    top_k: int,
     linkedin_dir: Path,
     dedup_fields: tuple[str, ...],
     resume_path: Path,
@@ -138,23 +136,10 @@ async def _run(
             rel_path,
         )
 
-        # Filter by threshold
-        passing = [(j, r) for j, r in scored_rel if r >= min_relevance]
-        passing.sort(key=lambda x: x[1], reverse=True)
-
-        scores = [r for _, r in scored_rel]
-        logger.info(
-            "relevance total=%d passing=%d threshold=%.2f"
-            " min=%.3f max=%.3f median=%.3f",
-            len(all_jobs),
-            len(passing),
-            min_relevance,
-            min(scores),
-            max(scores),
-            statistics.median(scores),
-        )
+        logger.info("relevance total=%d top_k=%d", len(all_jobs), top_k)
 
         # Deduplicate by selected fields (before top-k truncation)
+        passing = scored_rel
         if dedup_fields:
             seen: dict[tuple[str | None, ...], int] = {}
             deduped: list[tuple[Job, float]] = []
@@ -170,9 +155,7 @@ async def _run(
             )
             passing = deduped
 
-        if top_k is not None:
-            passing = passing[:top_k]
-
+        passing = passing[:top_k]
         unique_jobs = [j for j, _ in passing]
 
         if skip_score:
@@ -291,11 +274,8 @@ def run(
     keywords: Annotated[Path, typer.Option(help="Path to keywords file")] = Path(
         "keywords.txt"
     ),
-    min_relevance: Annotated[
-        float, typer.Option(help="Min BM25 relevance score (0-1)")
-    ] = 0.1,
     top_k: Annotated[
-        int | None,
+        int,
         typer.Option(help="Keep at most K jobs by relevance"),
     ] = 100,
     linkedin_dir: Annotated[
@@ -315,6 +295,7 @@ def run(
         datefmt="%H:%M:%S",
         level=logging.INFO,
     )
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     if dedup_fields:
         fields: tuple[str, ...] = tuple(
             f.strip() for f in dedup_fields.split(",")
@@ -339,7 +320,6 @@ def run(
             skip_score=skip_score,
             report=report,
             keywords_path=keywords,
-            min_relevance=min_relevance,
             top_k=top_k,
             linkedin_dir=linkedin_dir,
             dedup_fields=fields,
