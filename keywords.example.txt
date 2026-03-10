@@ -1,32 +1,20 @@
-# Role titles
-software engineer
-backend engineer
-platform engineer
-senior engineer
-staff engineer
+# FTS5 query syntax: "phrases", AND/OR/NOT, (grouping)
+# Groups separated by --- (score = max across groups)
 
-# Core skills
-distributed systems
-microservices
-API design
-cloud infrastructure
-Kubernetes
-
-# Languages and frameworks
-Python
-Go
-Java
-PostgreSQL
-Redis
-Kafka
-
-# ML and AI
-machine learning
-ML engineering
-model deployment
-PyTorch
-
-# Other interests
-developer tools
-infrastructure
-site reliability
+# Group 1: Backend / Platform
+("software engineer" OR "backend engineer" OR "platform engineer")
+("senior engineer" OR "staff engineer")
+NOT intern NOT internship
+---
+# Group 2: Infrastructure
+("distributed systems" OR microservices OR "API design")
+("cloud infrastructure" OR Kubernetes OR "site reliability")
+NOT intern NOT internship
+---
+# Group 3: Languages
+(Python OR Go OR Java OR PostgreSQL OR Redis OR Kafka)
+NOT intern NOT internship
+---
+# Group 4: ML/AI
+("machine learning" OR "ML engineering" OR "model deployment" OR PyTorch)
+NOT intern NOT internship

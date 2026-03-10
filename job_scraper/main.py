@@ -11,7 +11,7 @@ import typer
 
 from job_scraper.cache import open_cache
 from job_scraper.models import Job, to_dict
-from job_scraper.relevance import score_relevance
+from job_scraper.relevance import parse_query, score_relevance
 from job_scraper.scraper import ScrapeFn, discover
 from job_scraper.scraper.http import Http
 
@@ -114,14 +114,9 @@ async def _run(
                 f.write(json.dumps(to_dict(job)) + "\n")
         logger.info("wrote raw jobs count=%d path=%s", len(all_jobs), raw_path)
 
-        # BM25 relevance scoring
-        kw_lines = keywords_path.read_text().splitlines()
-        keywords = [
-            ln.strip()
-            for ln in kw_lines
-            if ln.strip() and not ln.strip().startswith("#")
-        ]
-        scored_rel = score_relevance(keywords, all_jobs)
+        # FTS5 relevance scoring
+        queries = parse_query(keywords_path.read_text())
+        scored_rel = score_relevance(queries, all_jobs)
 
         # Write all jobs with relevance (observability)
         rel_path = output_dir / "jobs_relevance.jsonl"

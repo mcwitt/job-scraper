@@ -1,42 +1,70 @@
-import re
-
-from rank_bm25 import BM25Okapi
+import sqlite3
 
 from job_scraper.models import Job
 
 
-def _tokenize(text: str) -> list[str]:
-    """Lowercase, strip punctuation, split into words."""
-    return re.findall(r"[a-z0-9]+", text.lower())
+def parse_query(text: str) -> list[str]:
+    """Parse keywords file into FTS5 query groups.
+
+    Strip # comments and blank lines, concatenate remaining
+    lines, split on --- separators.
+    """
+    groups: list[str] = []
+    current: list[str] = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped == "---":
+            if current:
+                groups.append(" ".join(current))
+                current = []
+            continue
+        current.append(stripped)
+    if current:
+        groups.append(" ".join(current))
+    return groups
 
 
 def score_relevance(
-    keywords: list[str], jobs: list[Job]
+    queries: list[str], jobs: list[Job]
 ) -> list[tuple[Job, float]]:
-    """BM25-score each job against keyword query terms.
+    """FTS5-score each job against query groups.
 
-    Returns all jobs paired with raw BM25 scores, sorted
-    descending by score.
+    Runs each query group independently, takes max score
+    per job across groups. Returns all jobs with scores,
+    sorted descending.
     """
     if not jobs:
         return []
 
-    query_tokens = []
-    for phrase in keywords:
-        query_tokens.extend(_tokenize(phrase))
+    conn = sqlite3.connect(":memory:")
+    try:
+        conn.execute(
+            "CREATE VIRTUAL TABLE docs USING fts5"
+            "(title, description)"
+        )
+        conn.executemany(
+            "INSERT INTO docs(rowid, title, description)"
+            " VALUES (?, ?, ?)",
+            (
+                (i, job.title, job.description)
+                for i, job in enumerate(jobs)
+            ),
+        )
 
-    # Title repeated for boost
-    corpus = [
-        _tokenize(f"{job.title} {job.title} {job.description}")
-        for job in jobs
-    ]
+        scores = [0.0] * len(jobs)
+        for query in queries:
+            # bm25 weights: title=5x, description=1x
+            for rowid, bm25 in conn.execute(
+                "SELECT rowid, bm25(docs, 5.0, 1.0)"
+                " FROM docs WHERE docs MATCH ?",
+                (query,),
+            ):
+                scores[rowid] = max(scores[rowid], -bm25)
+    finally:
+        conn.close()
 
-    bm25 = BM25Okapi(corpus)
-    raw_scores = bm25.get_scores(query_tokens)
-
-    results = [
-        (job, float(s))
-        for job, s in zip(jobs, raw_scores, strict=True)
-    ]
+    results = list(zip(jobs, scores, strict=True))
     results.sort(key=lambda x: x[1], reverse=True)
     return results
