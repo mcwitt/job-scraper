@@ -1,7 +1,7 @@
 import html
 import json
 from collections.abc import AsyncIterator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from bs4 import BeautifulSoup
 
@@ -39,7 +39,7 @@ def scrape_board(token: str):
     """Return a scrape function for a Greenhouse board."""
 
     async def scrape(http: Http) -> AsyncIterator[Job]:
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         url = f"https://boards-api.greenhouse.io/v1/boards/{token}/jobs?content=true&pay_transparency=true"
         body = await http.get(url)
         data = json.loads(body)

@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from jinja2 import Environment
@@ -191,11 +191,11 @@ def _time_ago(date_str: str | None) -> str:
         return ""
     try:
         dt = datetime.fromisoformat(date_str).replace(
-            tzinfo=timezone.utc
+            tzinfo=UTC
         )
     except ValueError:
         return date_str
-    delta = datetime.now(timezone.utc) - dt
+    delta = datetime.now(UTC) - dt
     seconds = int(delta.total_seconds())
     if seconds < 3600:
         n = max(seconds // 60, 1)
@@ -222,11 +222,11 @@ def _date_class(date_str: str | None) -> str:
         return ""
     try:
         dt = datetime.fromisoformat(date_str).replace(
-            tzinfo=timezone.utc
+            tzinfo=UTC
         )
     except ValueError:
         return ""
-    days = (datetime.now(timezone.utc) - dt).days
+    days = (datetime.now(UTC) - dt).days
     if days < 7:
         return "age-fresh"
     return ""
@@ -237,7 +237,7 @@ def _epoch(date_str: str | None) -> int:
         return 0
     try:
         dt = datetime.fromisoformat(date_str).replace(
-            tzinfo=timezone.utc
+            tzinfo=UTC
         )
         return int(dt.timestamp())
     except ValueError:

@@ -1,2 +1,26 @@
+[tool.ruff]
+target-version = "py313"
+line-length = 88
+
+[tool.ruff.lint]
+select = [
+    "E",     # pycodestyle errors
+    "F",     # pyflakes
+    "I",     # isort
+    "UP",    # pyupgrade
+    "B",     # flake8-bugbear
+    "SIM",   # flake8-simplify
+    "RUF",   # ruff-specific
+    "W",     # pycodestyle warnings
+    "ASYNC", # flake8-async
+    "S",     # flake8-bandit (security)
+    "PTH",   # flake8-use-pathlib
+    "T20",   # flake8-print
+]
+ignore = [
+    "E402",  # module-level import not at top of file
+    "T201",  # print found
+]
+
 [tool.pyrefly]
 project_includes = ["job_scraper"]
