@@ -1,3 +1,3 @@
 from job_scraper.scraper._ashby import scrape_board
 
-scrape = scrape_board("genesis-therapeutics")
+scrape = scrape_board("genesis-therapeutics", name="Genesis Therapeutics")

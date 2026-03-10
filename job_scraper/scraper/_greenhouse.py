@@ -35,7 +35,7 @@ def _format_pay(ranges: list[dict]) -> str | None:
     return " | ".join(parts) if parts else None
 
 
-def scrape_board(token: str):
+def scrape_board(token: str, *, name: str):
     """Return a scrape function for a Greenhouse board."""
 
     async def scrape(http: Http) -> AsyncIterator[Job]:
@@ -45,7 +45,6 @@ def scrape_board(token: str):
         data = json.loads(body)
         for posting in data.get("jobs", []):
             title = posting.get("title", "")
-            company = posting.get("company", {}).get("name", token)
             content = posting.get("content", "")
             description = _html_to_text(content) if content else ""
 
@@ -63,11 +62,11 @@ def scrape_board(token: str):
             pay_ranges = posting.get("pay_input_ranges", [])
             comp = _format_pay(pay_ranges)
 
-            h = job_hash(title, company, description)
+            h = job_hash(title, name, description)
             yield Job(
                 hash=h,
                 title=title,
-                company=company,
+                company=name,
                 team=team,
                 url=post_url,
                 posted=posted,

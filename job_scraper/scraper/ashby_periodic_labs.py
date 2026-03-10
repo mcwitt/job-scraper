@@ -1,3 +1,3 @@
 from job_scraper.scraper._ashby import scrape_board
 
-scrape = scrape_board("periodic-labs")
+scrape = scrape_board("periodic-labs", name="Periodic Labs")

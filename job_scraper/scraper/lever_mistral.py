@@ -1,3 +1,3 @@
 from job_scraper.scraper._lever import scrape_board
 
-scrape = scrape_board("mistral")
+scrape = scrape_board("mistral", name="Mistral")

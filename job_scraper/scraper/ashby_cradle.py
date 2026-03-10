@@ -1,3 +1,3 @@
 from job_scraper.scraper._ashby import scrape_board
 
-scrape = scrape_board("cradlebio")
+scrape = scrape_board("cradlebio", name="Cradle")

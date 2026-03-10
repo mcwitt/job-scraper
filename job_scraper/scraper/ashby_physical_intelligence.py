@@ -1,3 +1,3 @@
 from job_scraper.scraper._ashby import scrape_board
 
-scrape = scrape_board("physicalintelligence")
+scrape = scrape_board("physicalintelligence", name="Physical Intelligence")

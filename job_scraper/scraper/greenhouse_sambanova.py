@@ -1,3 +1,3 @@
 from job_scraper.scraper._greenhouse import scrape_board
 
-scrape = scrape_board("sambanovasystems")
+scrape = scrape_board("sambanovasystems", name="SambaNova")
