@@ -117,46 +117,47 @@ async def score_jobs(
         else:
             to_score.append(job)
 
-    if to_score:
-        batches = [
-            to_score[i : i + batch_size] for i in range(0, len(to_score), batch_size)
-        ]
-        logger.info(
-            "Scoring %d jobs (%d cached, %d batches)...",
-            len(to_score),
-            len(results),
-            len(batches),
+    if not to_score:
+        logger.info("All %d jobs cached", len(results))
+        return results
+
+    batches = [
+        to_score[i : i + batch_size] for i in range(0, len(to_score), batch_size)
+    ]
+    logger.info(
+        "Scoring %d jobs (%d cached, %d batches)...",
+        len(to_score),
+        len(results),
+        len(batches),
+    )
+
+    async def run_batch(
+        batch_num: int, batch: list[Job]
+    ) -> dict[str, tuple[float, str]]:
+        logger.info("Batch %d: %d jobs...", batch_num, len(batch))
+        scores = await score_batch(
+            batch, profile, client, model, semaphore, system_prompt
         )
-
-        async def run_batch(
-            batch_num: int, batch: list[Job]
-        ) -> dict[str, tuple[float, str]]:
-            logger.info("Batch %d: %d jobs...", batch_num, len(batch))
-            scores = await score_batch(
-                batch, profile, client, model, semaphore, system_prompt
-            )
-            for job in batch:
-                score_data = scores.get(job.hash)
-                if score_data is None:
-                    logger.warning(
-                        "Batch %d: LLM returned no score for"
-                        " %s (%s at %s)",
-                        batch_num,
-                        job.hash[:12],
-                        job.title,
-                        job.company,
-                    )
-                    continue
-                score, why = score_data
-                cache_put(
-                    f"{job.hash}:{context_hash}",
-                    {"score": score, "why": why},
+        for job in batch:
+            score_data = scores.get(job.hash)
+            if score_data is None:
+                logger.warning(
+                    "No score returned for %s — %s at %s",
+                    job.hash[:12],
+                    job.title,
+                    job.company,
                 )
-            return scores
+                continue
+            score, why = score_data
+            cache_put(
+                f"{job.hash}:{context_hash}",
+                {"score": score, "why": why},
+            )
+        return scores
 
-        batch_tasks = [run_batch(i + 1, batch) for i, batch in enumerate(batches)]
-        for batch_scores in await asyncio.gather(*batch_tasks):
-            results.update(batch_scores)
+    batch_tasks = [run_batch(i + 1, batch) for i, batch in enumerate(batches)]
+    for batch_scores in await asyncio.gather(*batch_tasks):
+        results.update(batch_scores)
 
     return results
 
