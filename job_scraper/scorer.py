@@ -108,9 +108,10 @@ async def score_jobs(
     results: dict[str, tuple[float, str]] = {}
     to_score: list[Job] = []
 
-    # Include prompt+profile in cache key so edits invalidate cached scores
+    # Hash the formatted prompt so edits invalidate cached scores
+    formatted = system_prompt.format(context=context)
     context_hash = hashlib.sha256(
-        (system_prompt + "\0" + context).encode()
+        formatted.encode()
     ).hexdigest()[:12]
 
     for job in jobs:
