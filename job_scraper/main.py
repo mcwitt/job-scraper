@@ -16,7 +16,7 @@ from job_scraper.relevance import score_relevance
 from job_scraper.scraper import ScrapeFn, discover
 from job_scraper.scraper._http import Http
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("job_scraper.main")
 app = typer.Typer()
 
 
