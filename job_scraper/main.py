@@ -123,8 +123,8 @@ async def _run(
 
         scores = [r for _, r in scored_rel]
         logger.info(
-            "Relevance: %d total, %d pass >= %s"
-            " (min=%.3f, max=%.3f, median=%.3f)",
+            "Relevance: total=%d passing=%d threshold=%.2f"
+            " min=%.3f max=%.3f median=%.3f",
             len(all_jobs),
             len(passing),
             min_relevance,
@@ -239,7 +239,7 @@ async def _run(
             lookup = load_linkedin(linkedin_dir)
             report_path = output_dir / "report.html"
             render_report(scored, report_path, lookup=lookup)
-            logger.info("Report written to %s", report_path)
+            logger.info("Wrote report to %s", report_path)
 
 
 @app.command()

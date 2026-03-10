@@ -144,7 +144,6 @@ async def score_jobs(
                     f"{job.hash}:{context_hash}",
                     {"score": score, "why": why},
                 )
-            logger.info("Batch %d: done", batch_num)
             return scores
 
         batch_tasks = [run_batch(i + 1, batch) for i, batch in enumerate(batches)]
