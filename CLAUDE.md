@@ -23,21 +23,25 @@ Key files:
 - `job_scraper/cache.py` — JSONL append-log cache with TTL
 - `job_scraper/models.py` — Job/ScoredJob frozen dataclasses
 - `job_scraper/report.py` — HTML report (Jinja2)
-- `job_scraper/scraper/__init__.py` — `GetFn`/`ScrapeFn` types, `discover()` auto-discovery
-- `job_scraper/scraper/http.py` — cached HTTP GET closure
+- `job_scraper/scraper/__init__.py` — `ScrapeFn` type, `discover()` auto-discovery
+- `job_scraper/scraper/http.py` — cached HTTP GET/POST with rate-limiting
+- `job_scraper/scraper/html.py` — shared HTML-to-text utility
 - `job_scraper/scraper/greenhouse.py` — Greenhouse `scrape_board()` factory
 - `job_scraper/scraper/ashby.py` — Ashby `scrape_board()` factory
 - `job_scraper/scraper/lever.py` — Lever `scrape_board()` factory
+- `job_scraper/scraper/gem.py` — Gem `scrape_board()` factory
+- `job_scraper/scraper/workday.py` — Workday `scrape_board()` factory
+- `boards.toml` — ATS board definitions; copy from `boards.example.toml`
 - `keywords.txt` — FTS5 query groups (`"phrases"`, `AND`/`OR`/`NOT`, `---` group separators); copy from `keywords.example.txt`
 - `profile.md` — candidate profile for LLM scoring; copy from `profile.example.md`
 - `resume.md` — candidate resume for recruiter scoring; copy from `resume.example.md`
 
 ## Adding scrapers
 
-Drop a `.py` file in `job_scraper/scraper/` (name must not start with `_`). It gets auto-discovered.
+Two ways to add scrapers:
 
-- **ATS board**: 3-line wrapper — `from job_scraper.scraper.greenhouse import scrape_board; scrape = scrape_board("company")`
-- **Ad-hoc**: implement `async def scrape(get: GetFn) -> AsyncIterator[Job]`
+- **ATS board**: add an entry to `boards.toml` (see `boards.example.toml`)
+- **Ad-hoc**: drop a `.py` file in `job_scraper/scraper/` (name must not start with `_`), implement `async def scrape(http: Http) -> AsyncIterator[Job]`
 
 ## Style
 

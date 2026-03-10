@@ -9,10 +9,12 @@ from typing import Any
 def _load(path: Path, ttl: float | None) -> dict[str, dict[str, Any]]:
     """Load cache entries from a JSONL file, discarding expired/corrupt lines."""
     entries: dict[str, dict[str, Any]] = {}
-    if not path.exists():
+    try:
+        text = path.read_text()
+    except FileNotFoundError:
         return entries
     now = time.time()
-    for line in path.read_text().splitlines():
+    for line in text.splitlines():
         try:
             record = json.loads(line)
         except json.JSONDecodeError:
@@ -51,6 +53,7 @@ async def open_cache(
     p = Path(path)
     entries = _load(p, ttl)
     dirty: list[dict[str, Any]] = []
+    p.parent.mkdir(parents=True, exist_ok=True)
 
     def get(key: str) -> dict[str, Any] | None:
         record = entries.get(key)
@@ -63,8 +66,6 @@ async def open_cache(
         record = {**value, "_key": key, "_ts": time.time()}
         entries[key] = record
         dirty.append(record)
-        # Append immediately so partial runs are recoverable
-        p.parent.mkdir(parents=True, exist_ok=True)
         with p.open("a") as f:
             f.write(json.dumps(record, separators=(",", ":")) + "\n")
 

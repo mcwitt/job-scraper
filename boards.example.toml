@@ -1,0 +1,28 @@
+# Board-based scrapers. Copy to boards.toml and customize.
+#
+# Each [[ats_type]] entry defines a board to scrape.
+# Required: board (ATS identifier), name (display name).
+# Optional: cache_ttl (seconds, overrides global scrape TTL).
+# Workday also requires: instance, site.
+
+[[greenhouse]]
+board = "anthropic"
+name = "Anthropic"
+
+[[ashby]]
+board = "openai"
+name = "OpenAI"
+
+[[lever]]
+board = "mistral"
+name = "Mistral"
+
+[[gem]]
+board = "groq"
+name = "Groq"
+
+[[workday]]
+board = "nvidia"
+instance = "wd5"
+site = "NVIDIAExternalCareerSite"
+name = "NVIDIA"

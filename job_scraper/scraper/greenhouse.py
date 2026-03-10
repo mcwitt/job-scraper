@@ -1,19 +1,11 @@
-import html
 import json
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 
-from bs4 import BeautifulSoup
-
 from job_scraper.hash import job_hash
 from job_scraper.models import Job
+from job_scraper.scraper.html import html_to_text
 from job_scraper.scraper.http import Http
-
-
-def _html_to_text(raw: str) -> str:
-    unescaped = html.unescape(raw)
-    soup = BeautifulSoup(unescaped, "lxml")
-    return soup.get_text(separator="\n", strip=True)
 
 
 def _format_pay(ranges: list[dict]) -> str | None:
@@ -46,7 +38,7 @@ def scrape_board(token: str, *, name: str):
         for posting in data.get("jobs", []):
             title = posting.get("title", "")
             content = posting.get("content", "")
-            description = _html_to_text(content) if content else ""
+            description = html_to_text(content) if content else ""
 
             departments = posting.get("departments", [])
             team = departments[0]["name"] if departments else None

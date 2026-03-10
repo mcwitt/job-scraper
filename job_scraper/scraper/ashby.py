@@ -8,10 +8,7 @@ from job_scraper.scraper.http import Http
 
 
 def _format_compensation(comp: dict) -> str | None:
-    summary = comp.get("compensationTierSummary")
-    if summary:
-        return summary
-    return None
+    return comp.get("compensationTierSummary") or None
 
 
 def scrape_board(board: str, *, name: str):
