@@ -1,0 +1,32 @@
+# Role titles
+software engineer
+backend engineer
+platform engineer
+senior engineer
+staff engineer
+
+# Core skills
+distributed systems
+microservices
+API design
+cloud infrastructure
+Kubernetes
+
+# Languages and frameworks
+Python
+Go
+Java
+PostgreSQL
+Redis
+Kafka
+
+# ML and AI
+machine learning
+ML engineering
+model deployment
+PyTorch
+
+# Other interests
+developer tools
+infrastructure
+site reliability

@@ -28,8 +28,9 @@ Key files:
 - `job_scraper/scraper/_greenhouse.py` — Greenhouse `scrape_board()` factory
 - `job_scraper/scraper/_ashby.py` — Ashby `scrape_board()` factory
 - `job_scraper/scraper/_lever.py` — Lever `scrape_board()` factory
-- `keywords.txt` — BM25 query terms (one per line, `#` comments)
-- `profile.md` — candidate profile for LLM scoring
+- `keywords.txt` — BM25 query terms (one per line, `#` comments); copy from `keywords.example.txt`
+- `profile.md` — candidate profile for LLM scoring; copy from `profile.example.md`
+- `resume.md` — candidate resume for recruiter scoring; copy from `resume.example.md`
 
 ## Adding scrapers
 
