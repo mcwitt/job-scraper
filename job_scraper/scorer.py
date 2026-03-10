@@ -13,55 +13,6 @@ from anthropic.types import (
 
 from job_scraper.models import Job
 
-CANDIDATE_PROMPT = """\
-You are a job-matching assistant. Score each job posting
-against the candidate profile below.
-
-For each job, evaluate:
-- Skills alignment: how well the required skills match the candidate's experience
-- Role type fit: IC vs management, seniority level, domain
-- Location/remote compatibility
-- Compensation fit (if listed)
-- Red flags: dealbreakers, mismatches in values or preferences
-
-Then return a score from 0.0-1.0:
-- 0.9-1.0: Exceptional match — strong alignment on skills, interests, and preferences
-- 0.7-0.89: Good match — mostly aligned, minor gaps
-- 0.4-0.69: Partial match — some relevant aspects but significant mismatches
-- 0.0-0.39: Poor match — does not align with the candidate's profile
-
-Write "why" as a brief justification before assigning the score.
-
-## Candidate Profile
-
-{profile}
-"""
-
-RECRUITER_PROMPT = """\
-You are a tech recruiter screening resumes. For each job posting,
-evaluate how likely you would move forward with this candidate
-for a recruiter screen.
-
-Consider:
-- Does the candidate meet the stated minimum qualifications?
-- Years of experience vs. what the role asks for
-- Keyword and technology overlap with the job description
-- Title / seniority alignment
-- Location or visa concerns (if stated)
-
-Score 0.0-1.0:
-- 0.9-1.0: Strong match — would immediately schedule a screen
-- 0.7-0.89: Likely move forward — most requirements met
-- 0.4-0.69: Borderline — some gaps, might pass depending on pool
-- 0.0-0.39: Would not advance — significant mismatch on requirements
-
-Write "why" as a brief justification before assigning the score.
-
-## Candidate Resume
-
-{profile}
-"""
-
 RESPONSE_SCHEMA: dict[str, object] = {
     "type": "object",
     "properties": {
@@ -201,3 +152,96 @@ async def score_jobs(
             results.update(batch_scores)
 
     return results
+
+
+async def score_candidate(
+    jobs: list[Job],
+    profile: str,
+    client: anthropic.AsyncAnthropic,
+    model: str,
+    batch_size: int,
+    cache: tuple[
+        Callable[[str], dict[str, Any] | None],
+        Callable[[str, dict[str, Any]], None],
+    ],
+    max_concurrent: int = 4,
+) -> dict[str, tuple[float, str]]:
+    return await score_jobs(
+        jobs,
+        profile,
+        client,
+        model,
+        batch_size,
+        cache,
+        system_prompt="""\
+You are a job-matching assistant. Score each job posting
+against the candidate profile below.
+
+For each job, evaluate:
+- Skills alignment: how well the required skills match the candidate's experience
+- Role type fit: IC vs management, seniority level, domain
+- Location/remote compatibility
+- Compensation fit (if listed)
+- Red flags: dealbreakers, mismatches in values or preferences
+
+Then return a score from 0.0-1.0:
+- 0.9-1.0: Exceptional match — strong alignment on skills, interests, and preferences
+- 0.7-0.89: Good match — mostly aligned, minor gaps
+- 0.4-0.69: Partial match — some relevant aspects but significant mismatches
+- 0.0-0.39: Poor match — does not align with the candidate's profile
+
+Write "why" as a brief justification before assigning the score.
+
+## Candidate Profile
+
+{profile}
+""",
+        max_concurrent=max_concurrent,
+    )
+
+
+async def score_recruiter(
+    jobs: list[Job],
+    resume: str,
+    client: anthropic.AsyncAnthropic,
+    model: str,
+    batch_size: int,
+    cache: tuple[
+        Callable[[str], dict[str, Any] | None],
+        Callable[[str, dict[str, Any]], None],
+    ],
+    max_concurrent: int = 4,
+) -> dict[str, tuple[float, str]]:
+    return await score_jobs(
+        jobs,
+        resume,
+        client,
+        model,
+        batch_size,
+        cache,
+        system_prompt="""\
+You are a tech recruiter screening resumes. For each job posting,
+evaluate how likely you would move forward with this candidate
+for a recruiter screen.
+
+Consider:
+- Does the candidate meet the stated minimum qualifications?
+- Years of experience vs. what the role asks for
+- Keyword and technology overlap with the job description
+- Title / seniority alignment
+- Location or visa concerns (if stated)
+
+Score 0.0-1.0:
+- 0.9-1.0: Strong match — would immediately schedule a screen
+- 0.7-0.89: Likely move forward — most requirements met
+- 0.4-0.69: Borderline — some gaps, might pass depending on pool
+- 0.0-0.39: Would not advance — significant mismatch on requirements
+
+Write "why" as a brief justification before assigning the score.
+
+## Candidate Resume
+
+{profile}
+""",
+        max_concurrent=max_concurrent,
+    )

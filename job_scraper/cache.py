@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 
-def _load(path: Path, ttl: float) -> dict[str, dict[str, Any]]:
+def _load(path: Path, ttl: float | None) -> dict[str, dict[str, Any]]:
     """Load cache entries from a JSONL file, discarding expired/corrupt lines."""
     entries: dict[str, dict[str, Any]] = {}
     if not path.exists():
@@ -22,7 +22,7 @@ def _load(path: Path, ttl: float) -> dict[str, dict[str, Any]]:
         if key is None:
             continue
         entry_ttl = record.get("_ttl", ttl)
-        if entry_ttl > 0 and (now - ts) > entry_ttl:
+        if entry_ttl is not None and (now - ts) > entry_ttl:
             continue
         entries[key] = record
     return entries
@@ -38,7 +38,7 @@ def _compact(path: Path, entries: dict[str, dict[str, Any]]) -> None:
 
 @asynccontextmanager
 async def open_cache(
-    path: str | Path, ttl: float = 0
+    path: str | Path, ttl: float | None = None
 ) -> AsyncIterator[
     tuple[Callable[[str], dict[str, Any] | None], Callable[[str, dict[str, Any]], None]]
 ]:
@@ -46,7 +46,7 @@ async def open_cache(
 
     Args:
         path: Path to the JSONL cache file.
-        ttl: Time-to-live in seconds. 0 means entries never expire.
+        ttl: Time-to-live in seconds. None means entries never expire.
     """
     p = Path(path)
     entries = _load(p, ttl)
