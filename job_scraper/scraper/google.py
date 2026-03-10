@@ -103,7 +103,6 @@ async def scrape(http: Http) -> AsyncIterator[Job]:
         jobs, reported_total = _parse_page(body)
         if total is None:
             total = reported_total
-            print(f"  google: {total} listings")
         if not jobs:
             break
         for entry in jobs:

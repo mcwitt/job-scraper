@@ -41,8 +41,6 @@ async def scrape(http: Http) -> AsyncIterator[Job]:
         if start >= data.get("count", 0):
             break
 
-    print(f"  netflix: {len(listings)} listings")
-
     # Fetch each job's detail page for the full description
     for job_id, _meta in listings:
         detail_url = f"{_API}/{job_id}?domain={_DOMAIN}"

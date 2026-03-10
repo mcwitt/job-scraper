@@ -34,7 +34,6 @@ async def scrape(http: Http) -> AsyncIterator[Job]:
     soup = BeautifulSoup(html, "lxml")
 
     rows = soup.select("[id^='job_list_']")
-    print(f"  lbnl: {len(rows)} listings")
 
     for row in rows:
         link = row.select_one(".job_link")
