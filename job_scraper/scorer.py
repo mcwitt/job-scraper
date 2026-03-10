@@ -96,7 +96,7 @@ async def score_jobs(
         Callable[[str, dict[str, Any]], None],
     ],
     system_prompt: str,
-    max_concurrent: int = 4,
+    max_concurrent: int = 10,
 ) -> dict[str, tuple[float, str]]:
     """Score jobs, using cache to skip already-scored ones.
 
@@ -176,7 +176,7 @@ async def score_interest(
         Callable[[str], dict[str, Any] | None],
         Callable[[str, dict[str, Any]], None],
     ],
-    max_concurrent: int = 4,
+    max_concurrent: int = 10,
 ) -> dict[str, tuple[float, str]]:
     return await score_jobs(
         jobs,
@@ -238,7 +238,7 @@ async def score_fit(
         Callable[[str], dict[str, Any] | None],
         Callable[[str, dict[str, Any]], None],
     ],
-    max_concurrent: int = 4,
+    max_concurrent: int = 10,
 ) -> dict[str, tuple[float, str]]:
     return await score_jobs(
         jobs,
