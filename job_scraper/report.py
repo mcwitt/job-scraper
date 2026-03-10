@@ -96,24 +96,32 @@ TEMPLATE = """\
   </thead>
   <tbody>
     {% for job in jobs %}
-    {% set cv = job.fit_candidate.value %}
-    {% set rv = job.fit_recruiter.value if job.fit_recruiter else cv %}
+    {% set cv = job.score_interest.value %}
+    {% set rv = job.score_fit.value if job.score_fit else cv %}
     {% set score = (cv * rv) ** 0.5 %}
     {% set first, second = lookup(job.company) %}
     <tr>
-      <td class="narrow" data-sort="{{ score }}">
+      <td class="narrow tip" data-sort="{{ score }}">
         <span class="score {{ score_class(score) }}"
           >{{ (score * 100) | round(0) | int }}</span>
+        <div class="tip-body">
+          <dt>Interest {{ (cv * 100) | round(0) | int }}</dt>
+          <dd>{{ job.score_interest.why }}</dd>
+          {% if job.score_fit is not none %}
+          <dt>Fit {{ (rv * 100) | round(0) | int }}</dt>
+          <dd>{{ job.score_fit.why }}</dd>
+          {% endif %}
+        </div>
       </td>
       <td class="narrow tip" data-sort="{{ cv }}">
         <span class="score {{ score_class(cv) }}"
           >{{ (cv * 100) | round(0) | int }}</span>
-        <div class="tip-body">{{ job.fit_candidate.why }}</div>
+        <div class="tip-body">{{ job.score_interest.why }}</div>
       </td>
       <td class="narrow tip" data-sort="{{ rv }}">
-        {% if job.fit_recruiter is not none %}<span class="score {{ score_class(rv) }}"
+        {% if job.score_fit is not none %}<span class="score {{ score_class(rv) }}"
           >{{ (rv * 100) | round(0) | int }}</span>
-        <div class="tip-body">{{ job.fit_recruiter.why }}</div>
+        <div class="tip-body">{{ job.score_fit.why }}</div>
         {% endif %}
       </td>
       <td class="date" data-sort="{{ epoch(job.posted) }}">{% if job.posted %}
