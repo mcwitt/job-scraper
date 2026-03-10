@@ -47,12 +47,12 @@ async def _run(
 
     scrapers = discover()
     if not scrapers:
-        logger.warning("No scrapers found in job_scraper/scraper/.")
+        logger.warning("no scrapers found")
         return
     logger.info(
-        "Discovered %d scrapers: %s",
+        "discovered scrapers count=%d names=%s",
         len(scrapers),
-        ", ".join(name for name, _, _ in scrapers),
+        ",".join(name for name, _, _ in scrapers),
     )
 
     async with (
@@ -71,11 +71,11 @@ async def _run(
                 jobs = []
                 async for job in fn(h):
                     jobs.append(job)
-                logger.info("%s: %d jobs", name, len(jobs))
+                logger.info("scraper=%s jobs=%d", name, len(jobs))
                 return jobs
             except Exception as exc:
                 now_str = datetime.now(UTC).isoformat()
-                logger.error("%s: %s", name, exc)
+                logger.error("scraper=%s error=%s", name, exc)
                 errors.append({
                     "scraper": name,
                     "timestamp": now_str,
@@ -106,7 +106,7 @@ async def _run(
                 for err in errors:
                     f.write(json.dumps(err) + "\n")
             logger.warning(
-                "%d scraper(s) failed — see %s", len(errors), errors_path
+                "scrapers_failed=%d path=%s", len(errors), errors_path
             )
 
         # Write raw scraped jobs before filtering
@@ -114,7 +114,7 @@ async def _run(
         with raw_path.open("w") as f:
             for job in all_jobs:
                 f.write(json.dumps(to_dict(job)) + "\n")
-        logger.info("Wrote %d raw jobs to %s", len(all_jobs), raw_path)
+        logger.info("wrote raw jobs count=%d path=%s", len(all_jobs), raw_path)
 
         # BM25 relevance scoring
         kw_lines = keywords_path.read_text().splitlines()
@@ -133,7 +133,7 @@ async def _run(
                 d["relevance"] = round(rel, 4)
                 f.write(json.dumps(d) + "\n")
         logger.info(
-            "Wrote %d jobs with relevance to %s",
+            "wrote relevance scores count=%d path=%s",
             len(scored_rel),
             rel_path,
         )
@@ -144,7 +144,7 @@ async def _run(
 
         scores = [r for _, r in scored_rel]
         logger.info(
-            "Relevance: total=%d passing=%d threshold=%.2f"
+            "relevance total=%d passing=%d threshold=%.2f"
             " min=%.3f max=%.3f median=%.3f",
             len(all_jobs),
             len(passing),
@@ -164,7 +164,7 @@ async def _run(
                     seen[key] = len(deduped)
                     deduped.append((job, rel))
             logger.info(
-                "%d unique jobs after dedup on %s",
+                "dedup unique=%d fields=%s",
                 len(deduped),
                 ",".join(dedup_fields),
             )
@@ -181,16 +181,14 @@ async def _run(
                 for job in unique_jobs:
                     f.write(json.dumps(to_dict(job)) + "\n")
             logger.info(
-                "Wrote %d jobs to %s", len(unique_jobs), output_path
+                "wrote jobs count=%d path=%s", len(unique_jobs), output_path
             )
             return
 
         # Score
         profile_text = profile_path.read_text()
         if not profile_text.strip():
-            logger.warning(
-                "%s is empty. Scores may be meaningless.", profile_path
-            )
+            logger.warning("profile is empty path=%s", profile_path)
 
         import anthropic
 
@@ -204,7 +202,7 @@ async def _run(
         ai = anthropic.AsyncAnthropic()
 
         async with open_cache(score_cache_path) as cand_cache:
-            logger.info("Scoring interest")
+            logger.info("scoring phase=interest")
             cand_scores = await score_interest(
                 unique_jobs,
                 profile_text,
@@ -216,7 +214,7 @@ async def _run(
 
         resume_text = resume_path.read_text()
         async with open_cache(recruiter_cache_path) as rec_cache:
-            logger.info("Scoring fit")
+            logger.info("scoring phase=fit")
             rec_scores = await score_fit(
                 unique_jobs,
                 resume_text,
@@ -251,7 +249,7 @@ async def _run(
         with output_path.open("w") as f:
             for job in scored:
                 f.write(json.dumps(to_dict(job)) + "\n")
-        logger.info("Wrote %d scored jobs to %s", len(scored), output_path)
+        logger.info("wrote scored jobs count=%d path=%s", len(scored), output_path)
 
         if report:
             from job_scraper.linkedin import load as load_linkedin
@@ -260,7 +258,7 @@ async def _run(
             lookup = load_linkedin(linkedin_dir)
             report_path = output_dir / "report.html"
             render_report(scored, report_path, lookup=lookup)
-            logger.info("Wrote report to %s", report_path)
+            logger.info("wrote report path=%s", report_path)
 
 
 @app.command()
@@ -312,11 +310,11 @@ def run(
     ] = "title,company,team",
 ) -> None:
     """Scrape and score job postings."""
-    handler = logging.StreamHandler()
-    handler.setFormatter(logging.Formatter("%(message)s"))
-    pkg = logging.getLogger("job_scraper")
-    pkg.addHandler(handler)
-    pkg.setLevel(logging.INFO)
+    logging.basicConfig(
+        format="%(asctime)s %(levelname)s %(message)s",
+        datefmt="%H:%M:%S",
+        level=logging.INFO,
+    )
     if dedup_fields:
         fields: tuple[str, ...] = tuple(
             f.strip() for f in dedup_fields.split(",")
