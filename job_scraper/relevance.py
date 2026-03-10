@@ -39,5 +39,5 @@ def score_relevance(
 
     return [
         (job, (score - lo) / (hi - lo))
-        for job, score in zip(jobs, raw_scores)
+        for job, score in zip(jobs, raw_scores, strict=True)
     ]

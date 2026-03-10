@@ -1,6 +1,6 @@
 import re
 from collections.abc import AsyncIterator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from job_scraper.hash import job_hash
 from job_scraper.models import Job
@@ -113,7 +113,7 @@ def _extract_jobs_js(chunk: str) -> list[dict[str, str]]:
 
 
 async def scrape(http: Http) -> AsyncIterator[Job]:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     # Step 1: fetch careers page to find the JS chunk URL
     html = await http.get(_CAREERS_URL)

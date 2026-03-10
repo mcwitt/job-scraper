@@ -2,7 +2,7 @@ import html
 import json
 import re
 from collections.abc import AsyncIterator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from bs4 import BeautifulSoup
 
@@ -68,7 +68,7 @@ def _build_job(entry: list, now: str) -> Job:
     posted = None
     if len(entry) > 12 and entry[12]:
         ts = entry[12][0]
-        posted = datetime.fromtimestamp(ts, tz=timezone.utc).strftime(
+        posted = datetime.fromtimestamp(ts, tz=UTC).strftime(
             "%Y-%m-%d"
         )
 
@@ -92,7 +92,7 @@ def _build_job(entry: list, now: str) -> Job:
 
 
 async def scrape(http: Http) -> AsyncIterator[Job]:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     page = 1
     total: int | None = None

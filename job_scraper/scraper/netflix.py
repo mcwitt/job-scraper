@@ -1,7 +1,7 @@
 import html
 import json
 from collections.abc import AsyncIterator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from bs4 import BeautifulSoup
 
@@ -20,7 +20,7 @@ def _html_to_text(raw: str) -> str:
 
 
 async def scrape(http: Http) -> AsyncIterator[Job]:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     # Paginate the list endpoint to collect all job IDs + metadata
     listings: list[tuple[int, dict]] = []
@@ -44,7 +44,7 @@ async def scrape(http: Http) -> AsyncIterator[Job]:
     print(f"  netflix: {len(listings)} listings")
 
     # Fetch each job's detail page for the full description
-    for job_id, meta in listings:
+    for job_id, _meta in listings:
         detail_url = f"{_API}/{job_id}?domain={_DOMAIN}"
         body = await http.get(detail_url)
         detail = json.loads(body)
@@ -61,7 +61,7 @@ async def scrape(http: Http) -> AsyncIterator[Job]:
         posted = None
         if t_create:
             posted = datetime.fromtimestamp(
-                t_create, tz=timezone.utc
+                t_create, tz=UTC
             ).strftime("%Y-%m-%d")
 
         h = job_hash(title, "Netflix", description)

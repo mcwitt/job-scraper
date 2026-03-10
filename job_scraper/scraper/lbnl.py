@@ -1,6 +1,6 @@
 import re
 from collections.abc import AsyncIterator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from bs4 import BeautifulSoup
 
@@ -29,7 +29,7 @@ def _parse_date(raw: str) -> str | None:
 
 
 async def scrape(http: Http) -> AsyncIterator[Job]:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     html = await http.get(_LIST_URL)
     soup = BeautifulSoup(html, "lxml")
 

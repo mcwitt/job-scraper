@@ -2,7 +2,7 @@ import asyncio
 import html
 import json
 from collections.abc import AsyncIterator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from bs4 import BeautifulSoup
 
@@ -34,7 +34,7 @@ def scrape_board(company: str, instance: str, site: str):
     jobs_url = f"{base}/wday/cxs/{company}/{site}/jobs"
 
     async def scrape(http: Http) -> AsyncIterator[Job]:
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         company_name = company.upper()
 
         # Phase 1: paginate listings via POST (cached)
@@ -116,7 +116,7 @@ def scrape_board(company: str, instance: str, site: str):
         _log(f"  workday:{company}: {len(details)} details done")
 
         for (title, ext_path, location), (description, posted) in zip(
-            stubs, details
+            stubs, details, strict=True
         ):
             post_url = f"{base}/{site}{ext_path}"
             h = job_hash(title, company_name, description)
