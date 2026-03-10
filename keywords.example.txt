@@ -1,14 +1,14 @@
 # FTS5 query syntax: "phrases", AND/OR/NOT, (grouping)
-# Groups separated by --- (score = max across groups)
+# Lines within a group are concatenated; --- separates groups (score = max across groups)
 
 # Group 1: Backend / Platform
 ("software engineer" OR "backend engineer" OR "platform engineer")
-("senior engineer" OR "staff engineer")
+AND ("senior engineer" OR "staff engineer")
 NOT intern NOT internship
 ---
 # Group 2: Infrastructure
 ("distributed systems" OR microservices OR "API design")
-("cloud infrastructure" OR Kubernetes OR "site reliability")
+AND ("cloud infrastructure" OR Kubernetes OR "site reliability")
 NOT intern NOT internship
 ---
 # Group 3: Languages
