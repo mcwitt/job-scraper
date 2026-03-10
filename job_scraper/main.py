@@ -3,7 +3,6 @@ import dataclasses
 import json
 import logging
 import statistics
-import sys
 from pathlib import Path
 from typing import Annotated
 
@@ -292,7 +291,7 @@ def run(
     ] = "title,company,team",
 ) -> None:
     """Scrape and score job postings."""
-    handler = logging.StreamHandler(sys.stdout)
+    handler = logging.StreamHandler()
     handler.setFormatter(logging.Formatter("%(message)s"))
     pkg = logging.getLogger("job_scraper")
     pkg.addHandler(handler)
