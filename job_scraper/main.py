@@ -159,8 +159,8 @@ async def _run(
 
         from job_scraper.models import Score, ScoredJob, scored_job
         from job_scraper.scorer import (
-            score_candidate,
-            score_recruiter,
+            score_fit,
+            score_interest,
         )
 
         recruiter_cache_path = cache_dir / "fit_recruiter.jsonl"
@@ -168,7 +168,7 @@ async def _run(
 
         async with open_cache(score_cache_path) as cand_cache:
             print("--- Candidate fit scoring ---")
-            cand_scores = await score_candidate(
+            cand_scores = await score_interest(
                 unique_jobs,
                 profile_text,
                 ai,
@@ -180,7 +180,7 @@ async def _run(
         resume_text = resume_path.read_text()
         async with open_cache(recruiter_cache_path) as rec_cache:
             print("--- Recruiter fit scoring ---")
-            rec_scores = await score_recruiter(
+            rec_scores = await score_fit(
                 unique_jobs,
                 resume_text,
                 ai,
