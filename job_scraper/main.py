@@ -3,6 +3,7 @@ import dataclasses
 import json
 import logging
 import statistics
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -63,13 +64,24 @@ async def _run(
 
         # Scrape all sources concurrently
         all_jobs: list[Job] = []
+        errors: list[dict] = []
 
         async def collect(name: str, fn: ScrapeFn, h: Http) -> list[Job]:
-            jobs = []
-            async for job in fn(h):
-                jobs.append(job)
-            logger.info("%s: %d jobs", name, len(jobs))
-            return jobs
+            try:
+                jobs = []
+                async for job in fn(h):
+                    jobs.append(job)
+                logger.info("%s: %d jobs", name, len(jobs))
+                return jobs
+            except Exception as exc:
+                now_str = datetime.now(UTC).isoformat()
+                logger.error("%s: %s", name, exc)
+                errors.append({
+                    "scraper": name,
+                    "timestamp": now_str,
+                    "error": str(exc),
+                })
+                return []
 
         async with asyncio.TaskGroup() as tg:
             tasks = [
@@ -87,6 +99,15 @@ async def _run(
 
         for task in tasks:
             all_jobs.extend(task.result())
+
+        if errors:
+            errors_path = output_dir / "scraper_errors.jsonl"
+            with errors_path.open("w") as f:
+                for err in errors:
+                    f.write(json.dumps(err) + "\n")
+            logger.warning(
+                "%d scraper(s) failed — see %s", len(errors), errors_path
+            )
 
         # Write raw scraped jobs before filtering
         raw_path = output_dir / "jobs_raw.jsonl"
