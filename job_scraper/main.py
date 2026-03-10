@@ -264,7 +264,7 @@ def run(
     ),
     max_concurrent: Annotated[
         int, typer.Option(help="Max concurrent HTTP requests")
-    ] = 5,
+    ] = 20,
     skip_score: Annotated[
         bool, typer.Option("--skip-score", help="Skip scoring step")
     ] = False,
