@@ -1,3 +1,27 @@
+[build-system]
+requires = ["setuptools>=65"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "job-scraper"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "anthropic",
+    "beautifulsoup4",
+    "dacite",
+    "httpx",
+    "jinja2",
+    "lxml",
+    "typer",
+]
+
+[project.scripts]
+job-scraper = "job_scraper.main:app"
+
+[tool.setuptools.packages.find]
+include = ["job_scraper*"]
+
 [tool.ruff]
 target-version = "py313"
 line-length = 88
