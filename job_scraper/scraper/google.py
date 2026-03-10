@@ -1,13 +1,11 @@
-import html
 import json
 import re
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 
-from bs4 import BeautifulSoup
-
 from job_scraper.hash import job_hash
 from job_scraper.models import Job
+from job_scraper.scraper._html import html_to_text
 from job_scraper.scraper._http import Http
 
 _BASE = "https://www.google.com/about/careers/applications"
@@ -18,11 +16,6 @@ _DS1_RE = re.compile(
     re.DOTALL,
 )
 _PAGE_SIZE = 20
-
-
-def _html_to_text(raw: str) -> str:
-    soup = BeautifulSoup(html.unescape(raw), "lxml")
-    return soup.get_text(separator="\n", strip=True)
 
 
 def _parse_page(body: str) -> tuple[list[list], int]:
@@ -61,7 +54,7 @@ def _build_job(entry: list, now: str) -> Job:
     parts: list[str] = []
     for idx in (10, 3, 4):
         if idx < len(entry) and entry[idx] and entry[idx][1]:
-            parts.append(_html_to_text(entry[idx][1]))
+            parts.append(html_to_text(entry[idx][1]))
     description = "\n\n".join(parts)
 
     # Posted timestamp: entry[12] = [epoch_seconds, nanos]

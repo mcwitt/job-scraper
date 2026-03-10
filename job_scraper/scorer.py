@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 async def score_batch(
     jobs: list[Job],
-    profile: str,
+    context: str,
     client: anthropic.AsyncAnthropic,
     model: str,
     semaphore: asyncio.Semaphore,
@@ -47,7 +47,7 @@ async def score_batch(
             model=model,
             max_tokens=16384,
             thinking={"type": "enabled", "budget_tokens": 4096},
-            system=system_prompt.format(profile=profile),
+            system=system_prompt.format(context=context),
             messages=[{"role": "user", "content": user_msg}],
             output_config=OutputConfigParam(
                 format=JSONOutputFormatParam(
@@ -87,7 +87,7 @@ async def score_batch(
 
 async def score_jobs(
     jobs: list[Job],
-    profile: str,
+    context: str,
     client: anthropic.AsyncAnthropic,
     model: str,
     batch_size: int,
@@ -110,7 +110,7 @@ async def score_jobs(
 
     # Include prompt+profile in cache key so edits invalidate cached scores
     context_hash = hashlib.sha256(
-        (system_prompt + "\0" + profile).encode()
+        (system_prompt + "\0" + context).encode()
     ).hexdigest()[:12]
 
     for job in jobs:
@@ -140,7 +140,7 @@ async def score_jobs(
     ) -> dict[str, tuple[float, str]]:
         logger.info("batch=%d jobs=%d", batch_num, len(batch))
         scores = await score_batch(
-            batch, profile, client, model, semaphore, system_prompt
+            batch, context, client, model, semaphore, system_prompt
         )
         for job in batch:
             score_data = scores.get(job.hash)
@@ -222,7 +222,7 @@ Write "why" as a brief justification before assigning the score.
 
 ## Candidate Profile
 
-{profile}
+{context}
 """,
         max_concurrent=max_concurrent,
     )
@@ -286,7 +286,7 @@ Write "why" as a brief justification before assigning the score.
 
 ## Candidate Resume
 
-{profile}
+{context}
 """,
         max_concurrent=max_concurrent,
     )

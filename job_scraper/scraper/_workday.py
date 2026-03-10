@@ -1,25 +1,17 @@
 import asyncio
-import html
 import json
 import logging
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 
-from bs4 import BeautifulSoup
-
 from job_scraper.hash import job_hash
 from job_scraper.models import Job
+from job_scraper.scraper._html import html_to_text
 from job_scraper.scraper._http import Http
 
 logger = logging.getLogger(__name__)
 
 _PAGE_SIZE = 20
-
-
-def _html_to_text(raw: str) -> str:
-    unescaped = html.unescape(raw)
-    soup = BeautifulSoup(unescaped, "lxml")
-    return soup.get_text(separator="\n", strip=True)
 
 
 def scrape_board(company: str, instance: str, site: str, *, name: str):
@@ -117,7 +109,7 @@ def scrape_board(company: str, instance: str, site: str, *, name: str):
                 body = await http.get(url)
                 info = json.loads(body).get("jobPostingInfo", {})
                 desc_html = info.get("jobDescription", "")
-                desc = _html_to_text(desc_html) if desc_html else ""
+                desc = html_to_text(desc_html) if desc_html else ""
                 start = info.get("startDate")
                 posted = start[:10] if start else None
                 return desc, posted

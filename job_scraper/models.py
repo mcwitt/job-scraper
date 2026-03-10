@@ -1,7 +1,4 @@
 from dataclasses import asdict, dataclass
-from typing import Any
-
-import dacite
 
 
 @dataclass(frozen=True)
@@ -42,13 +39,7 @@ class ScoredJob:
     score_fit: Score | None = None
 
 
-_DACITE = dacite.Config(strict=True)
-
 to_dict = asdict
-
-
-def from_dict[T](cls: type[T], d: dict[str, Any]) -> T:
-    return dacite.from_dict(cls, d, config=_DACITE)
 
 
 def scored_job(

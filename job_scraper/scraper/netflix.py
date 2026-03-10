@@ -1,22 +1,15 @@
-import html
 import json
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 
-from bs4 import BeautifulSoup
-
 from job_scraper.hash import job_hash
 from job_scraper.models import Job
+from job_scraper.scraper._html import html_to_text
 from job_scraper.scraper._http import Http
 
 _API = "https://explore.jobs.netflix.net/api/apply/v2/jobs"
 _DOMAIN = "netflix.com"
 _PAGE_SIZE = 100
-
-
-def _html_to_text(raw: str) -> str:
-    soup = BeautifulSoup(html.unescape(raw), "lxml")
-    return soup.get_text(separator="\n", strip=True)
 
 
 async def scrape(http: Http) -> AsyncIterator[Job]:
@@ -49,7 +42,7 @@ async def scrape(http: Http) -> AsyncIterator[Job]:
 
         title = detail.get("name", "")
         raw_desc = detail.get("job_description", "")
-        description = _html_to_text(raw_desc) if raw_desc else ""
+        description = html_to_text(raw_desc) if raw_desc else ""
 
         location = detail.get("location")
         department = detail.get("department")
