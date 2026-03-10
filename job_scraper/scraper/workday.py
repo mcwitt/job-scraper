@@ -14,7 +14,6 @@ from job_scraper.scraper.http import Http
 logger = logging.getLogger(__name__)
 
 _PAGE_SIZE = 20
-_DETAIL_CONCURRENCY = 20
 
 
 def _html_to_text(raw: str) -> str:
@@ -38,15 +37,25 @@ def scrape_board(company: str, instance: str, site: str, *, name: str):
         # Phase 1: paginate listings via POST (cached)
         stubs: list[tuple[str, str, str | None]] = []
 
-        first_body = await http.post(
-            jobs_url,
-            json={
-                "limit": _PAGE_SIZE,
-                "offset": 0,
-                "appliedFacets": {},
-                "searchText": "",
-            },
-        )
+        try:
+            first_body = await http.post(
+                jobs_url,
+                json={
+                    "limit": _PAGE_SIZE,
+                    "offset": 0,
+                    "appliedFacets": {},
+                    "searchText": "",
+                },
+            )
+        except Exception:
+            logger.warning(
+                "scraper=workday:%s company=%s offset=0"
+                " page_error=true",
+                company,
+                name,
+            )
+            return
+
         first = json.loads(first_body)
         total = first.get("total", 0)
         logger.info(
@@ -65,16 +74,26 @@ def scrape_board(company: str, instance: str, site: str, *, name: str):
 
         # Fetch remaining pages concurrently
         async def fetch_page(offset: int) -> list[dict]:
-            body = await http.post(
-                jobs_url,
-                json={
-                    "limit": _PAGE_SIZE,
-                    "offset": offset,
-                    "appliedFacets": {},
-                    "searchText": "",
-                },
-            )
-            return json.loads(body).get("jobPostings", [])
+            try:
+                body = await http.post(
+                    jobs_url,
+                    json={
+                        "limit": _PAGE_SIZE,
+                        "offset": offset,
+                        "appliedFacets": {},
+                        "searchText": "",
+                    },
+                )
+                return json.loads(body).get("jobPostings", [])
+            except Exception:
+                logger.warning(
+                    "scraper=workday:%s company=%s offset=%d"
+                    " page_error=true",
+                    company,
+                    name,
+                    offset,
+                )
+                return []
 
         remaining = await asyncio.gather(*(
             fetch_page(off)
@@ -88,15 +107,14 @@ def scrape_board(company: str, instance: str, site: str, *, name: str):
                     posting.get("locationsText"),
                 ))
 
-        # Phase 2: fetch detail pages concurrently (cached, wide semaphore)
-        detail_sem = asyncio.Semaphore(_DETAIL_CONCURRENCY)
+        # Phase 2: fetch detail pages concurrently (cached)
         done = 0
 
         async def fetch_detail(ext_path: str) -> tuple[str, str | None]:
             nonlocal done
             url = f"{base}/wday/cxs/{company}/{site}{ext_path}"
             try:
-                body = await http.get(url, sem=detail_sem)
+                body = await http.get(url)
                 info = json.loads(body).get("jobPostingInfo", {})
                 desc_html = info.get("jobDescription", "")
                 desc = _html_to_text(desc_html) if desc_html else ""
