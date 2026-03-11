@@ -121,7 +121,7 @@ async def _run(
     scrape_ttl: int,
     batch_size: int,
     model: str,
-    profile_path: Path,
+    preferences_path: Path,
     max_concurrent: int,
     skip_score: bool,
     report: bool,
@@ -203,9 +203,9 @@ async def _run(
         return
 
     # Score
-    profile_text = profile_path.read_text()
-    if not profile_text.strip():
-        logger.warning("profile is empty path=%s", profile_path)
+    preferences_text = preferences_path.read_text()
+    if not preferences_text.strip():
+        logger.warning("preferences is empty path=%s", preferences_path)
 
     import anthropic
 
@@ -222,7 +222,7 @@ async def _run(
         logger.info("scoring phase=interest")
         interest_scores = await score_interest(
             unique_jobs,
-            profile_text,
+            preferences_text,
             ai,
             model,
             batch_size,
@@ -293,9 +293,9 @@ def run(
     model: Annotated[
         str, typer.Option(help="Claude model for scoring")
     ] = "claude-haiku-4-5-20251001",
-    profile: Annotated[Path, typer.Option(help="Path to candidate profile")] = Path(
-        "profile.md"
-    ),
+    preferences: Annotated[
+        Path, typer.Option(help="Path to candidate preferences")
+    ] = Path("preferences.md"),
     max_concurrent: Annotated[
         int, typer.Option(help="Max concurrent HTTP requests")
     ] = 20,
@@ -363,7 +363,7 @@ def run(
             scrape_ttl=scrape_ttl,
             batch_size=batch_size,
             model=model,
-            profile_path=profile,
+            preferences_path=preferences,
             max_concurrent=max_concurrent,
             skip_score=skip_score,
             report=report,

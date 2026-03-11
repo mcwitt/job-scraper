@@ -1,6 +1,6 @@
 # Job Scraper
 
-Scrape job postings from ATS platforms, score them against a candidate profile using Claude, and output ranked results.
+Scrape job postings from ATS platforms, score them against candidate preferences using Claude, and output ranked results.
 
 ## Quick start
 
@@ -33,7 +33,7 @@ Key files:
 - `job_scraper/scraper/_workday.py` — Workday `scrape_board()` factory
 - `boards.toml` — ATS board definitions; copy from `boards.example.toml`
 - `keywords.txt` — FTS5 query groups (`"phrases"`, `AND`/`OR`/`NOT`, `---` group separators); copy from `keywords.example.txt`
-- `profile.md` — candidate profile for LLM scoring; copy from `profile.example.md`
+- `preferences.md` — candidate job preferences for interest scoring; copy from `preferences.example.md`
 - `resume.md` — candidate resume for recruiter scoring; copy from `resume.example.md`
 
 ## Adding scrapers
