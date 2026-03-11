@@ -54,7 +54,7 @@ def load(linkedin_dir: str | Path) -> LookupFn:
     linkedin_dir = Path(linkedin_dir)
 
     # First-degree connections
-    first_csv = linkedin_dir / "linkedin_connections.csv"
+    first_csv = linkedin_dir / "Connections.csv"
     first_index: dict[str, list[Connection]] = {}
     if first_csv.exists():
         first_index = _parse_connections_csv(first_csv)
@@ -69,10 +69,10 @@ def load(linkedin_dir: str | Path) -> LookupFn:
         for person_dir in sorted(network_dir.iterdir()):
             if not person_dir.is_dir():
                 continue
-            conn_csv = person_dir / "linkedin_connections.csv"
+            conn_csv = person_dir / "Connections.csv"
             if not conn_csv.exists():
                 continue
-            info_path = person_dir / "connection.json"
+            info_path = person_dir / "Person.json"
             if info_path.exists():
                 info = json.loads(info_path.read_text())
                 first_name = info.get("first_name", "")

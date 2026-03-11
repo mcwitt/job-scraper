@@ -52,20 +52,25 @@ let
           let
             files = userFiles name ucfg;
             userDir = "${stateDir}/users/${ucfg.id}";
-            cmd = concatStringsSep " " [
-              "${pkg}/bin/job-scraper"
-              "--input-jobs ${stateDir}/output/jobs_raw.jsonl"
-              "--report"
-              "--profile ${files.profileFile}"
-              "--resume ${files.resumeFile}"
-              "--keywords ${files.keywordsFile}"
-              "--cache-dir ${userDir}/cache"
-              "--output-dir ${userDir}/output"
-              "--model ${s.model}"
-              "--batch-size ${toString s.batchSize}"
-              "--top-k ${toString s.topK}"
-              "--dedup-fields ${s.dedupFields}"
-            ];
+            cmd = concatStringsSep " " (
+              [
+                "${pkg}/bin/job-scraper"
+                "--input-jobs ${stateDir}/output/jobs_raw.jsonl"
+                "--report"
+                "--profile ${files.profileFile}"
+                "--resume ${files.resumeFile}"
+                "--keywords ${files.keywordsFile}"
+                "--cache-dir ${userDir}/cache"
+                "--output-dir ${userDir}/output"
+                "--model ${s.model}"
+                "--batch-size ${toString s.batchSize}"
+                "--top-k ${toString s.topK}"
+                "--dedup-fields ${s.dedupFields}"
+              ]
+              ++ lib.optional (
+                ucfg.linkedinConnectionsDir != null
+              ) "--linkedin-dir ${ucfg.linkedinConnectionsDir}"
+            );
           in
           ''
             (
@@ -180,6 +185,11 @@ in
               keywords = mkOption {
                 type = types.str;
                 description = "FTS5 query content for relevance filtering.";
+              };
+              linkedinConnectionsDir = mkOption {
+                type = types.nullOr types.path;
+                default = null;
+                description = "Path or derivation containing LinkedIn data (Connections.csv and network/).";
               };
               outputDir = mkOption {
                 type = types.str;
