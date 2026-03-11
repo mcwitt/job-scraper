@@ -214,8 +214,8 @@ document.addEventListener('click', function(e) {
     {name: 'Fit', on: false}, {name: 'Posted', on: true},
     {name: 'Title', on: true}, {name: 'Company', on: true},
     {name: '1st', on: true}, {name: '2nd', on: true},
-    {name: 'Team', on: false}, {name: 'Location', on: true},
-    {name: 'Compensation', on: true},
+    {name: 'Team', on: false}, {name: 'Location', on: false},
+    {name: 'Compensation', on: false},
     {name: 'Scraped', on: false}
   ];
   var KEY = 'job-scraper-cols';
