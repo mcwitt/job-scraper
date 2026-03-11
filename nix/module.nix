@@ -163,10 +163,10 @@ in
             options = {
               id = mkOption {
                 type = types.str;
-                default = builtins.hashString "sha256" name;
+                default = builtins.substring 0 8 (builtins.hashString "sha256" name);
                 description = ''
                   Public identifier used in file paths and URLs.
-                  Defaults to a SHA-256 hash of the user attribute name.
+                  Defaults to the first 8 characters of the SHA-256 hash of the user attribute name.
                 '';
               };
               profile = mkOption {
