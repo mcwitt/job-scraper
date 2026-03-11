@@ -23,12 +23,12 @@ let
   userFiles =
     name: ucfg:
     let
-      profileFile = pkgs.writeText "${name}-profile.md" ucfg.profile;
+      preferencesFile = pkgs.writeText "${name}-preferences.md" ucfg.preferences;
       resumeFile = pkgs.writeText "${name}-resume.md" ucfg.resume;
       keywordsFile = pkgs.writeText "${name}-keywords.txt" ucfg.keywords;
     in
     {
-      inherit profileFile resumeFile keywordsFile;
+      inherit preferencesFile resumeFile keywordsFile;
     };
 
   stateDir = "/var/lib/job-scraper";
@@ -57,7 +57,7 @@ let
                 "${pkg}/bin/job-scraper"
                 "--input-jobs ${stateDir}/output/jobs_raw.jsonl"
                 "--report"
-                "--profile ${files.profileFile}"
+                "--preferences ${files.preferencesFile}"
                 "--resume ${files.resumeFile}"
                 "--keywords ${files.keywordsFile}"
                 "--cache-dir ${userDir}/cache"
@@ -174,9 +174,9 @@ in
                   Defaults to the first 8 characters of the SHA-256 hash of the user attribute name.
                 '';
               };
-              profile = mkOption {
+              preferences = mkOption {
                 type = types.str;
-                description = "Candidate profile (markdown content).";
+                description = "Candidate job preferences (markdown content).";
               };
               resume = mkOption {
                 type = types.str;

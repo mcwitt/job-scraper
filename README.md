@@ -1,6 +1,6 @@
 # Job Scraper
 
-Scrape job postings from ATS platforms, score them against a candidate profile using Claude, and output ranked results.
+Scrape job postings from ATS platforms, score them against candidate preferences using Claude, and output ranked results.
 
 ## Setup
 
@@ -13,7 +13,7 @@ nix develop
 # Copy and customize personal config files
 cp boards.example.toml boards.toml
 cp keywords.example.txt keywords.txt
-cp profile.example.md profile.md
+cp preferences.example.md preferences.md
 cp resume.example.md resume.md
 ```
 
@@ -96,7 +96,7 @@ All personal config files are gitignored. Copy from `*.example.*` to get started
 |------|---------|
 | `boards.toml` | Which ATS boards to scrape |
 | `keywords.txt` | FTS5 query groups for relevance filtering |
-| `profile.md` | Free-form candidate profile for interest scoring |
+| `preferences.md` | What the candidate is looking for in a job |
 | `resume.md` | Candidate resume for recruiter-fit scoring |
 
 ## NixOS deployment
@@ -136,14 +136,14 @@ Add the flake as an input and import the module:
             };
 
             users.alice = {
-              profile = builtins.readFile ./alice/profile.md;
+              preferences = builtins.readFile ./alice/preferences.md;
               resume = builtins.readFile ./alice/resume.md;
               keywords = builtins.readFile ./alice/keywords.txt;
               linkedinConnectionsDir = ./alice/linkedin;
             };
 
             users.bob = {
-              profile = builtins.readFile ./bob/profile.md;
+              preferences = builtins.readFile ./bob/preferences.md;
               resume = builtins.readFile ./bob/resume.md;
               keywords = builtins.readFile ./bob/keywords.txt;
             };

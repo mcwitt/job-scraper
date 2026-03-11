@@ -9,6 +9,6 @@ linkedin/
 
 # Personal config (copy from *.example.* and customize)
 boards.toml
-profile.md
+preferences.md
 keywords.txt
 resume.md

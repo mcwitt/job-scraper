@@ -169,7 +169,7 @@ async def score_jobs(
 
 async def score_interest(
     jobs: list[Job],
-    profile: str,
+    preferences: str,
     client: anthropic.AsyncAnthropic,
     model: str,
     batch_size: int,
@@ -181,7 +181,7 @@ async def score_interest(
 ) -> dict[str, tuple[float, str]]:
     return await score_jobs(
         jobs,
-        profile,
+        preferences,
         client,
         model,
         batch_size,
@@ -221,7 +221,7 @@ Score 0.0-1.0:
 
 Write "why" as a brief justification before assigning the score.
 
-## Candidate Profile
+## Candidate Preferences
 
 {context}
 """,
