@@ -59,9 +59,6 @@ TEMPLATE = """\
   .conns { text-align: center; }
   .date { white-space: nowrap;
     font-size: 0.85em; }
-  .pager { display: flex; align-items: center;
-    gap: 0.5rem; margin-bottom: 1rem;
-    font-size: 0.85em; }
 </style>
 </head>
 <body>
@@ -233,44 +230,7 @@ document.addEventListener('click', function() {
     });
 });
 (function() {
-  var PAGE_SIZE = 50;
-  var curPage = 0;
-  var pgPrev = document.getElementById('pg-prev');
-  var pgNext = document.getElementById('pg-next');
-  var pgInfo = document.getElementById('pg-info');
-  var pager = document.getElementById('pager');
-  var tbody = document.querySelector('tbody');
-  function getRows() {
-    return Array.from(
-      tbody.querySelectorAll('tr'));
-  }
-  function showPage(page) {
-    var rows = getRows();
-    var total = rows.length;
-    var numPages = Math.max(1,
-      Math.ceil(total / PAGE_SIZE));
-    curPage = Math.max(0,
-      Math.min(page, numPages - 1));
-    var start = curPage * PAGE_SIZE;
-    var end = start + PAGE_SIZE;
-    rows.forEach(function(r, i) {
-      r.style.display =
-        (i >= start && i < end) ? '' : 'none';
-    });
-    pgInfo.textContent = (start + 1)
-      + '\\u2013' + Math.min(end, total)
-      + ' of ' + total;
-    pgPrev.disabled = curPage === 0;
-    pgNext.disabled = curPage >= numPages - 1;
-    pager.style.display =
-      numPages <= 1 ? 'none' : '';
-  }
-  pgPrev.addEventListener('click', function() {
-    showPage(curPage - 1);
-  });
-  pgNext.addEventListener('click', function() {
-    showPage(curPage + 1);
-  });
+  var showPage = initPager(50);
   initColumns([
     {name: 'Score', on: true},
     {name: 'Interest', on: false},

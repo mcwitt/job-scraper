@@ -41,11 +41,21 @@ TEMPLATE = """\
   &middot; {{ total }} sources
   {%- if failing %}, {{ failing }} failing
   {%- endif %}</p>
-<div class="col-toggle"
-  style="margin-bottom: 1rem;">
-  <button class="btn" id="col-btn"
-    >Columns &#9662;</button>
-  <div class="col-panel" id="col-panel"></div>
+<div style="display: flex; gap: 1rem;
+  align-items: start; flex-wrap: wrap;
+  margin-bottom: 1rem;">
+  <div class="col-toggle">
+    <button class="btn" id="col-btn"
+      >Columns &#9662;</button>
+    <div class="col-panel" id="col-panel"></div>
+  </div>
+  <div class="pager" id="pager">
+    <button class="btn" id="pg-prev"
+      >&lsaquo; Prev</button>
+    <span id="pg-info"></span>
+    <button class="btn" id="pg-next"
+      >Next &rsaquo;</button>
+  </div>
 </div>
 <table>
   <thead>
@@ -107,16 +117,20 @@ TEMPLATE = """\
 </table>
 <script>
 {{ base_js }}
-initColumns([
-  {name: 'Source', on: true},
-  {name: 'Last Run', on: true},
-  {name: 'Status', on: true},
-  {name: 'Jobs', on: true},
-  {name: 'Last Success', on: true},
-  {name: 'Jobs (success)', on: true},
-  {name: 'Error', on: true}
-], 'scraper-status-cols');
-initSort();
+(function() {
+  var showPage = initPager(50);
+  initColumns([
+    {name: 'Source', on: true},
+    {name: 'Last Run', on: true},
+    {name: 'Status', on: true},
+    {name: 'Jobs', on: true},
+    {name: 'Last Success', on: true},
+    {name: 'Jobs (success)', on: true},
+    {name: 'Error', on: true}
+  ], 'scraper-status-cols');
+  initSort(function() { showPage(0); });
+  showPage(0);
+})();
 </script>
 </body>
 </html>

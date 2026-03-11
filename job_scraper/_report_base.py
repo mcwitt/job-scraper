@@ -99,6 +99,9 @@ a:hover { text-decoration: underline; }
   cursor: pointer; white-space: nowrap; }
 .col-panel label:hover {
   background: var(--panel-hover); }
+.pager { display: flex; align-items: center;
+  gap: 0.5rem; margin-bottom: 1rem;
+  font-size: 0.85em; }
 """
 
 BASE_JS = """\
@@ -169,6 +172,46 @@ function initColumns(cols, key) {
       e.stopPropagation();
     });
   apply();
+}
+function initPager(pageSize) {
+  var curPage = 0;
+  var pgPrev = document.getElementById('pg-prev');
+  var pgNext = document.getElementById('pg-next');
+  var pgInfo = document.getElementById('pg-info');
+  var pager = document.getElementById('pager');
+  var tbody = document.querySelector('tbody');
+  function getRows() {
+    return Array.from(
+      tbody.querySelectorAll('tr'));
+  }
+  function showPage(page) {
+    var rows = getRows();
+    var total = rows.length;
+    var numPages = Math.max(1,
+      Math.ceil(total / pageSize));
+    curPage = Math.max(0,
+      Math.min(page, numPages - 1));
+    var start = curPage * pageSize;
+    var end = start + pageSize;
+    rows.forEach(function(r, i) {
+      r.style.display =
+        (i >= start && i < end) ? '' : 'none';
+    });
+    pgInfo.textContent = (start + 1)
+      + '\\u2013' + Math.min(end, total)
+      + ' of ' + total;
+    pgPrev.disabled = curPage === 0;
+    pgNext.disabled = curPage >= numPages - 1;
+    pager.style.display =
+      numPages <= 1 ? 'none' : '';
+  }
+  pgPrev.addEventListener('click', function() {
+    showPage(curPage - 1);
+  });
+  pgNext.addEventListener('click', function() {
+    showPage(curPage + 1);
+  });
+  return showPage;
 }
 function initSort(afterSort) {
   var table = document.querySelector('table');
