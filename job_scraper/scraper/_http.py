@@ -67,7 +67,34 @@ class Http:
         self, url: str, *, json: dict[str, Any]
     ) -> tuple[str, str]:
         """Return (body, fetched_at) for a POST request."""
-        key = f"POST {url} {json_mod.dumps(json, sort_keys=True)}"
+        return await self._post(
+            url,
+            json_mod.dumps(json, sort_keys=True),
+            json=json,
+        )
+
+    async def post_form(
+        self,
+        url: str,
+        *,
+        data: dict[str, Any],
+        headers: dict[str, str] | None = None,
+    ) -> tuple[str, str]:
+        """Return (body, fetched_at) for a form-encoded POST."""
+        return await self._post(
+            url,
+            json_mod.dumps(data, sort_keys=True),
+            data=data,
+            headers=headers,
+        )
+
+    async def _post(
+        self,
+        url: str,
+        cache_suffix: str,
+        **kwargs: Any,
+    ) -> tuple[str, str]:
+        key = f"POST {url} {cache_suffix}"
         cached = self.cache_get(key)
         if cached is not None:
             if "error" in cached:
@@ -78,7 +105,7 @@ class Http:
             return cached["body"], fetched_at
         async with self.semaphore:
             try:
-                resp = await self.client.post(url, json=json)
+                resp = await self.client.post(url, **kwargs)
                 resp.raise_for_status()
             except httpx.HTTPStatusError as exc:
                 self.cache_put(
