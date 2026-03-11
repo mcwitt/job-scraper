@@ -79,7 +79,8 @@ TEMPLATE = """\
 </head>
 <body>
 <h1>Job Scraper Report</h1>
-<p class="meta" style="margin-bottom: 1rem;">{{ jobs | length }} jobs scored</p>
+<p class="meta" style="margin-bottom: 1rem;"
+  >{{ jobs | length }} jobs scored &middot; Generated {{ generated_ago }}</p>
 <div style="display: flex; gap: 1rem; align-items: start; flex-wrap: wrap;">
   <div class="col-toggle">
     <button class="btn" id="col-btn">Columns &#9662;</button>
@@ -402,8 +403,10 @@ def render_report(
 ) -> None:
     env = Environment(autoescape=True)
     template = env.from_string(TEMPLATE)
+    now = datetime.now(UTC).isoformat()
     html = template.render(
         jobs=jobs,
+        generated_ago=_time_ago(now),
         score_class=_score_class,
         date_class=_date_class,
         time_ago=_time_ago,
