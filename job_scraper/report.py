@@ -80,7 +80,9 @@ TEMPLATE = """\
 <body>
 <h1>Job Scraper Report</h1>
 <p class="meta" style="margin-bottom: 1rem;"
-  >{{ jobs | length }} jobs scored &middot; Generated {{ generated_ago }}</p>
+  >{{ jobs | length }} jobs scored &middot;
+  Generated at <time id="generated-at"
+    datetime="{{ generated_at }}"></time></p>
 <div style="display: flex; gap: 1rem; align-items: start; flex-wrap: wrap;">
   <div class="col-toggle">
     <button class="btn" id="col-btn">Columns &#9662;</button>
@@ -187,6 +189,11 @@ TEMPLATE = """\
   </tbody>
 </table>
 <script>
+(function() {
+  var el = document.getElementById('generated-at');
+  var d = new Date(el.getAttribute('datetime'));
+  el.textContent = d.toLocaleString();
+})();
 document.querySelectorAll('.cell').forEach(function(el) {
   el.addEventListener('click', function() { this.classList.toggle('expanded'); });
 });
@@ -406,7 +413,7 @@ def render_report(
     now = datetime.now(UTC).isoformat()
     html = template.render(
         jobs=jobs,
-        generated_ago=_time_ago(now),
+        generated_at=now,
         score_class=_score_class,
         date_class=_date_class,
         time_ago=_time_ago,
