@@ -67,9 +67,9 @@ TEMPLATE = """\
 <body>
 <h1>Job Scraper Report</h1>
 <p class="meta" style="margin-bottom: 1rem;"
-  >{{ jobs | length }} jobs scored &middot;
-  Generated <time id="generated-at"
-    datetime="{{ generated_at }}"></time></p>
+  >Generated <time id="generated-at"
+    datetime="{{ generated_at }}"></time>
+  &middot; {{ jobs | length }} jobs scored</p>
 <div style="display: flex; gap: 1rem;
   align-items: start; flex-wrap: wrap;">
   <div class="col-toggle">
