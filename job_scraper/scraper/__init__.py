@@ -17,6 +17,7 @@ _FACTORIES: dict[str, str] = {
     "ashby": "job_scraper.scraper._ashby",
     "lever": "job_scraper.scraper._lever",
     "gem": "job_scraper.scraper._gem",
+    "workable": "job_scraper.scraper._workable",
     "workday": "job_scraper.scraper._workday",
 }
 
