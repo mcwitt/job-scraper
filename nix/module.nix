@@ -40,6 +40,7 @@ let
       scrapeCmd = concatStringsSep " " [
         "${pkg}/bin/job-scraper"
         "--scrape-only"
+        "--status-report"
         "--boards ${boardsFile}"
         "--cache-dir ${stateDir}/cache"
         "--output-dir ${stateDir}/output"
@@ -158,6 +159,17 @@ in
         default = "title,company,team";
         description = "Comma-separated Job fields for deduplication.";
       };
+    };
+
+    outputDir = mkOption {
+      type = types.str;
+      readOnly = true;
+      default = "${stateDir}/output";
+      description = ''
+        Read-only. Shared output directory containing jobs_raw.jsonl
+        and status.html. Use this to configure downstream services
+        (e.g. nginx).
+      '';
     };
 
     users = mkOption {
