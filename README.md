@@ -139,17 +139,13 @@ Add the flake as an input and import the module:
               profile = builtins.readFile ./alice/profile.md;
               resume = builtins.readFile ./alice/resume.md;
               keywords = builtins.readFile ./alice/keywords.txt;
+              linkedinConnectionsDir = ./alice/linkedin;
             };
 
             users.bob = {
               profile = builtins.readFile ./bob/profile.md;
               resume = builtins.readFile ./bob/resume.md;
               keywords = builtins.readFile ./bob/keywords.txt;
-            };
-
-            nginx = {
-              enable = true;
-              hostName = "jobs.example.com";
             };
           };
         }
@@ -162,7 +158,7 @@ Add the flake as an input and import the module:
 This sets up:
 - A shared scrape phase running daily via systemd timer
 - Per-user scoring/reporting (Alice and Bob scored in parallel)
-- Nginx serving reports at `jobs.example.com/alice/` and `jobs.example.com/bob/`
+- Reports written to each user's `outputDir` (e.g. `/var/lib/job-scraper/users/<id>/output/`)
 
 Trigger manually with `systemctl start job-scraper.service`.
 
