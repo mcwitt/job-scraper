@@ -4,7 +4,10 @@ import json
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
+
+if TYPE_CHECKING:
+    from job_scraper.status import SourceStatus
 
 import dacite
 import httpx
@@ -36,20 +39,25 @@ async def _scrape(
     output_dir: Path,
     scrape_ttl: int,
     max_concurrent: int,
-) -> list[Job]:
+) -> tuple[list[Job], dict[str, "SourceStatus"]]:
     """Run scrape phase: discover → scrape → write jobs_raw.jsonl."""
+    from job_scraper import status as _status
+
     scrape_cache_path = cache_dir / "scrape.jsonl"
+    status_path = cache_dir / "scraper_status.json"
     semaphore = asyncio.Semaphore(max_concurrent)
 
     scrapers = discover(boards_path)
     if not scrapers:
         logger.warning("no scrapers found")
-        return []
+        return [], {}
     logger.info(
         "discovered scrapers count=%d names=%s",
         len(scrapers),
         ",".join(name for name, _, _ in scrapers),
     )
+
+    statuses = _status.load(status_path)
 
     async with (
         httpx.AsyncClient(follow_redirects=True, timeout=30) as client,
@@ -59,26 +67,19 @@ async def _scrape(
         http = Http(client, cache_get, cache_put, semaphore)
 
         all_jobs: list[Job] = []
-        errors: list[dict] = []
 
         async def collect(
             name: str, fn: ScrapeFn, h: Http
-        ) -> list[Job]:
+        ) -> tuple[str, list[Job], str | None]:
             try:
-                jobs = []
+                jobs: list[Job] = []
                 async for job in fn(h):
                     jobs.append(job)
                 logger.info("scraper=%s jobs=%d", name, len(jobs))
-                return jobs
+                return (name, jobs, None)
             except Exception as exc:
-                now_str = datetime.now(UTC).isoformat()
                 logger.error("scraper=%s error=%s", name, exc)
-                errors.append({
-                    "scraper": name,
-                    "timestamp": now_str,
-                    "error": str(exc),
-                })
-                return []
+                return (name, [], str(exc))
 
         async with asyncio.TaskGroup() as tg:
             tasks = [
@@ -94,8 +95,24 @@ async def _scrape(
                 for name, fn, ttl in scrapers
             ]
 
+        errors: list[dict] = []
+        now_str = datetime.now(UTC).isoformat()
         for task in tasks:
-            all_jobs.extend(task.result())
+            name, jobs, error = task.result()
+            all_jobs.extend(jobs)
+            if error is None:
+                statuses = _status.record_run(
+                    statuses, name, now_str, ok=True, job_count=len(jobs)
+                )
+            else:
+                statuses = _status.record_run(
+                    statuses, name, now_str, ok=False, error=error
+                )
+                errors.append({
+                    "scraper": name,
+                    "timestamp": now_str,
+                    "error": error,
+                })
 
         if errors:
             errors_path = output_dir / "scraper_errors.jsonl"
@@ -106,13 +123,16 @@ async def _scrape(
                 "scrapers_failed=%d path=%s", len(errors), errors_path
             )
 
+    _status.save(status_path, statuses)
+    logger.info("saved scraper status path=%s", status_path)
+
     raw_path = output_dir / "jobs_raw.jsonl"
     with raw_path.open("w") as f:
         for job in all_jobs:
             f.write(json.dumps(to_dict(job)) + "\n")
     logger.info("wrote raw jobs count=%d path=%s", len(all_jobs), raw_path)
 
-    return all_jobs
+    return all_jobs, statuses
 
 
 async def _run(
@@ -133,6 +153,7 @@ async def _run(
     boards_path: Path = Path("boards.toml"),
     scrape_only: bool = False,
     input_jobs: Path | None = None,
+    status_report: bool = False,
 ) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -140,9 +161,15 @@ async def _run(
     if input_jobs is not None:
         all_jobs = _load_jobs(input_jobs)
     else:
-        all_jobs = await _scrape(
+        all_jobs, statuses = await _scrape(
             boards_path, cache_dir, output_dir, scrape_ttl, max_concurrent
         )
+        if status_report:
+            from job_scraper.status_report import render_status_report
+
+            report_path = output_dir / "status.html"
+            render_status_report(statuses, report_path)
+            logger.info("wrote status report path=%s", report_path)
         if scrape_only:
             return
 
@@ -333,6 +360,12 @@ def run(
         Path | None,
         typer.Option(help="Skip scrape, read raw jobs from JSONL file"),
     ] = None,
+    status_report: Annotated[
+        bool,
+        typer.Option(
+            "--status-report", help="Generate scraper status HTML report"
+        ),
+    ] = False,
 ) -> None:
     """Scrape and score job postings."""
     if scrape_only and input_jobs is not None:
@@ -375,6 +408,7 @@ def run(
             boards_path=boards,
             scrape_only=scrape_only,
             input_jobs=input_jobs,
+            status_report=status_report,
         )
     )
 
