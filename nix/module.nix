@@ -51,7 +51,7 @@ let
           name: ucfg:
           let
             files = userFiles name ucfg;
-            userDir = "${stateDir}/users/${name}";
+            userDir = "${stateDir}/users/${ucfg.id}";
             cmd = concatStringsSep " " [
               "${pkg}/bin/job-scraper"
               "--input-jobs ${stateDir}/output/jobs_raw.jsonl"
@@ -157,33 +157,45 @@ in
 
     users = mkOption {
       type = types.attrsOf (
-        types.submodule {
-          options = {
-            profile = mkOption {
-              type = types.str;
-              description = "Candidate profile (markdown content).";
+        types.submodule (
+          { name, config, ... }:
+          {
+            options = {
+              id = mkOption {
+                type = types.str;
+                default = builtins.hashString "sha256" name;
+                description = ''
+                  Public identifier used in file paths and URLs.
+                  Defaults to a SHA-256 hash of the user attribute name.
+                '';
+              };
+              profile = mkOption {
+                type = types.str;
+                description = "Candidate profile (markdown content).";
+              };
+              resume = mkOption {
+                type = types.str;
+                description = "Candidate resume (markdown content).";
+              };
+              keywords = mkOption {
+                type = types.str;
+                description = "FTS5 query content for relevance filtering.";
+              };
+              outputDir = mkOption {
+                type = types.str;
+                readOnly = true;
+                default = "${stateDir}/users/${config.id}/output";
+                description = ''
+                  Read-only. Directory where this user's report is generated.
+                  Use this to configure downstream services (e.g. nginx).
+                '';
+              };
             };
-            resume = mkOption {
-              type = types.str;
-              description = "Candidate resume (markdown content).";
-            };
-            keywords = mkOption {
-              type = types.str;
-              description = "FTS5 query content for relevance filtering.";
-            };
-          };
-        }
+          }
+        )
       );
       default = { };
       description = "Per-user scoring configuration.";
-    };
-
-    nginx = {
-      enable = mkEnableOption "nginx virtual host for job-scraper reports";
-      hostName = mkOption {
-        type = types.str;
-        description = "Nginx server name for the reports virtual host.";
-      };
     };
   };
 
@@ -223,26 +235,5 @@ in
         Persistent = true;
       };
     };
-
-    services.nginx = mkIf cfg.nginx.enable {
-      enable = true;
-      virtualHosts.${cfg.nginx.hostName} = {
-        locations = lib.listToAttrs (
-          mapAttrsToList (name: _ucfg: {
-            name = "/${name}/";
-            value = {
-              alias = "${stateDir}/users/${name}/output/";
-              index = "report.html";
-              extraConfig = ''
-                autoindex on;
-              '';
-            };
-          }) cfg.users
-        );
-      };
-    };
-
-    # Ensure nginx can read the output files
-    users.users.nginx.extraGroups = mkIf cfg.nginx.enable [ "job-scraper" ];
   };
 }
