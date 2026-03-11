@@ -102,26 +102,12 @@ a:hover { text-decoration: underline; }
 """
 
 BASE_JS = """\
-function localISO(d) {
-  var z = d.getTimezoneOffset();
-  var s = z <= 0 ? '+' : '-';
-  z = Math.abs(z);
-  function p(n) {
-    return (n < 10 ? '0' : '') + n;
-  }
-  return d.getFullYear()
-    + '-' + p(d.getMonth() + 1)
-    + '-' + p(d.getDate())
-    + 'T' + p(d.getHours())
-    + ':' + p(d.getMinutes())
-    + ':' + p(d.getSeconds())
-    + s + p(z / 60 | 0) + ':' + p(z % 60);
-}
 (function() {
   var el = document.getElementById('generated-at');
   if (el) {
     var dt = el.getAttribute('datetime');
-    el.textContent = localISO(new Date(dt));
+    el.textContent =
+      new Date(dt).toLocaleString();
   }
 })();
 document.addEventListener('click', function(e) {

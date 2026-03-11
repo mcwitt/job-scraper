@@ -38,7 +38,9 @@ TEMPLATE = """\
 <h1>Scraper Status</h1>
 <p class="meta">Generated <time id="generated-at"
   datetime="{{ generated_at }}"></time>
-  &mdash; {{ total }} sources</p>
+  &middot; {{ total }} sources
+  {%- if failing %}, {{ failing }} failing
+  {%- endif %}</p>
 <div class="col-toggle"
   style="margin-bottom: 1rem;">
   <button class="btn" id="col-btn"
@@ -133,10 +135,16 @@ def render_status_report(
 
     env = jinja2.Environment(autoescape=False)  # noqa: S701
     tmpl = env.from_string(TEMPLATE)
+    failing = sum(
+        1
+        for s in statuses.values()
+        if s.last_run_ok is False
+    )
     html = tmpl.render(
         statuses=sorted_statuses,
         generated_at=now.isoformat(),
         total=len(sorted_statuses),
+        failing=failing,
         time_ago=_time_ago,
         epoch=_epoch,
         base_css=BASE_CSS,
