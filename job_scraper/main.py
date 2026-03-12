@@ -34,7 +34,6 @@ def _load_jobs(path: Path) -> list[Job]:
 
 
 async def _scrape(
-    boards_path: Path,
     cache_dir: Path,
     output_dir: Path,
     scrape_ttl: int,
@@ -47,7 +46,7 @@ async def _scrape(
     status_path = cache_dir / "scraper_status.json"
     semaphore = asyncio.Semaphore(max_concurrent)
 
-    scrapers = discover(boards_path)
+    scrapers = discover()
     if not scrapers:
         logger.warning("no scrapers found")
         return [], {}
@@ -151,7 +150,6 @@ async def _run(
     dedup_fields: tuple[str, ...],
     resume_path: Path,
     companies_dir: Path,
-    boards_path: Path = Path("boards.toml"),
     scrape_only: bool = False,
     input_jobs: Path | None = None,
     status_report: bool = False,
@@ -163,7 +161,7 @@ async def _run(
         all_jobs = _load_jobs(input_jobs)
     else:
         all_jobs, statuses = await _scrape(
-            boards_path, cache_dir, output_dir, scrape_ttl, max_concurrent
+            cache_dir, output_dir, scrape_ttl, max_concurrent
         )
         if status_report:
             from job_scraper.status_report import render_status_report
@@ -358,9 +356,6 @@ def run(
     companies: Annotated[
         Path, typer.Option(help="Company context directory")
     ] = Path("companies"),
-    boards: Annotated[
-        Path, typer.Option(help="Path to boards.toml")
-    ] = Path("boards.toml"),
     scrape_only: Annotated[
         bool,
         typer.Option("--scrape-only", help="Scrape only, write jobs_raw.jsonl"),
@@ -415,7 +410,6 @@ def run(
             dedup_fields=fields,
             resume_path=resume,
             companies_dir=companies,
-            boards_path=boards,
             scrape_only=scrape_only,
             input_jobs=input_jobs,
             status_report=status_report,

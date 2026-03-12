@@ -11,7 +11,6 @@ Requires [Nix](https://nixos.org/) with flakes enabled.
 nix develop
 
 # Copy and customize personal config files
-cp boards.example.toml boards.toml
 cp keywords.example.txt keywords.txt
 cp preferences.example.md preferences.md
 cp resume.example.md resume.md
@@ -44,10 +43,7 @@ Output goes to `data/output/` by default:
 
 ### Scraper discovery
 
-Scrapers are loaded from two sources:
-
-1. **`boards.toml`** — declarative ATS board definitions (Greenhouse, Ashby, Lever, Gem, Workday). See `boards.example.toml`.
-2. **Python modules** in `job_scraper/scraper/` — any `.py` file whose name does not start with `_` is auto-discovered. Must export `async def scrape(http: Http) -> AsyncIterator[Job]`.
+Every `.py` file in `job_scraper/scraper/` whose name does not start with `_` is auto-discovered. Each must export `async def scrape(http: Http) -> AsyncIterator[Job]`.
 
 ### Key modules
 
@@ -63,12 +59,12 @@ Scrapers are loaded from two sources:
 
 ## Adding scrapers
 
-**ATS board** (Greenhouse, Ashby, Lever, Gem, Workday): add an entry to `boards.toml`:
+**ATS board** (Greenhouse, Ashby, Lever, Gem, Workable, Workday): create a stub in `job_scraper/scraper/`:
 
-```toml
-[[greenhouse]]
-board = "mycompany"
-name = "My Company"
+```python
+from job_scraper.scraper.greenhouse import scrape_board
+
+scrape = scrape_board("mycompany", name="My Company")
 ```
 
 **Custom scraper**: create `job_scraper/scraper/mycompany.py`:
@@ -94,7 +90,6 @@ All personal config files are gitignored. Copy from `*.example.*` to get started
 
 | File | Purpose |
 |------|---------|
-| `boards.toml` | Which ATS boards to scrape |
 | `keywords.txt` | FTS5 query groups for relevance filtering |
 | `preferences.md` | What the candidate is looking for in a job |
 | `resume.md` | Candidate resume for recruiter-fit scoring |
@@ -120,15 +115,6 @@ Add the flake as an input and import the module:
             enable = true;
             schedule = "daily";
             anthropicApiKeyFile = "/run/secrets/anthropic-api-key";
-
-            boards = {
-              greenhouse = [
-                { board = "anthropic"; name = "Anthropic"; }
-              ];
-              ashby = [
-                { board = "openai"; name = "OpenAI"; }
-              ];
-            };
 
             settings = {
               model = "claude-haiku-4-5-20251001";
