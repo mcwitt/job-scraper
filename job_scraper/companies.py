@@ -1,6 +1,6 @@
 import logging
 import re
-from pathlib import Path
+from importlib.resources import files
 
 logger = logging.getLogger(__name__)
 
@@ -10,14 +10,13 @@ def canonicalize(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
 
 
-def load_companies(companies_dir: Path) -> dict[str, str]:
-    """Load company context files. Returns canonical_name -> content."""
-    if not companies_dir.is_dir():
-        logger.info("no companies dir path=%s", companies_dir)
-        return {}
+def load_companies() -> dict[str, str]:
+    """Load bundled company context files. Returns canonical_name -> content."""
     ctx: dict[str, str] = {}
-    for p in sorted(companies_dir.glob("*.md")):
-        # resolve symlinks so aliases map to the same content
-        ctx[p.stem] = p.read_text().strip()
-    logger.info("loaded companies count=%d path=%s", len(ctx), companies_dir)
+    package = files(__package__)
+    for item in package.iterdir():
+        if item.name.endswith(".md"):
+            stem = item.name.removesuffix(".md")
+            ctx[stem] = item.read_text(encoding="utf-8").strip()
+    logger.info("loaded companies count=%d", len(ctx))
     return ctx

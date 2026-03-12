@@ -20,7 +20,7 @@ Key files:
 - `job_scraper/main.py` — CLI (Typer) and pipeline orchestration
 - `job_scraper/relevance.py` — FTS5 relevance scoring against keywords.txt
 - `job_scraper/scorer.py` — Claude scoring with extended thinking and structured output
-- `job_scraper/companies.py` — company context loading and name canonicalization
+- `job_scraper/companies/` — company context package (bundled `.md` files + `canonicalize`/`load_companies`)
 - `job_scraper/cache.py` — JSONL append-log cache with TTL
 - `job_scraper/models.py` — Job/ScoredJob frozen dataclasses
 - `job_scraper/report.py` — HTML report (Jinja2)
@@ -37,7 +37,6 @@ Key files:
 - `keywords.txt` — FTS5 query groups (`"phrases"`, `AND`/`OR`/`NOT`, `---` group separators); copy from `keywords.example.txt`
 - `preferences.md` — candidate job preferences for interest scoring; copy from `preferences.example.md`
 - `resume.md` — candidate resume for recruiter scoring; copy from `resume.example.md`
-- `companies/` — company context markdown files (e.g. `nvidia.md`); name = `canonicalize(company_name)`
 
 ## Adding scrapers
 
@@ -50,6 +49,8 @@ scrape = scrape_board("mycompany", name="My Company")
 ```
 
 For custom scrapers, implement `async def scrape(http: Http) -> AsyncIterator[Job]`.
+
+When adding a scraper for a new company, also add a company context file at `job_scraper/companies/<canonical-name>.md` (where canonical name is lowercase, non-alphanumeric replaced with hyphens).
 
 ## Style
 

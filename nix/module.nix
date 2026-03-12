@@ -65,7 +65,6 @@ let
                 "--top-k ${toString s.topK}"
                 "--dedup-fields ${s.dedupFields}"
               ]
-              ++ lib.optional (s.companiesDir != null) "--companies ${s.companiesDir}"
               ++ lib.optional (
                 ucfg.linkedinConnectionsDir != null
               ) "--linkedin-dir ${ucfg.linkedinConnectionsDir}"
@@ -118,14 +117,6 @@ in
     };
 
     settings = {
-      companiesDir = mkOption {
-        type = types.nullOr types.path;
-        default = null;
-        description = ''
-          Path or derivation containing company context markdown files.
-          Files should be named by canonical company name (e.g. nvidia.md).
-        '';
-      };
       model = mkOption {
         type = types.str;
         default = "claude-haiku-4-5-20251001";
