@@ -56,11 +56,17 @@ def score_relevance(
         scores = [0.0] * len(jobs)
         for query in queries:
             # bm25 weights: title=5x, description=1x
-            for rowid, bm25 in conn.execute(
-                "SELECT rowid, bm25(docs, 5.0, 1.0)"
-                " FROM docs WHERE docs MATCH ?",
-                (query,),
-            ):
+            try:
+                rows = conn.execute(
+                    "SELECT rowid, bm25(docs, 5.0, 1.0)"
+                    " FROM docs WHERE docs MATCH ?",
+                    (query,),
+                )
+            except sqlite3.OperationalError as e:
+                raise ValueError(
+                    f"Bad FTS5 query: {query!r}"
+                ) from e
+            for rowid, bm25 in rows:
                 scores[rowid] = max(scores[rowid], -bm25)
     finally:
         conn.close()
