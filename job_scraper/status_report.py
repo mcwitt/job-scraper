@@ -40,7 +40,8 @@ TEMPLATE = """\
   datetime="{{ generated_at }}"></time>
   &middot; {{ total }} sources
   {%- if failing %}, {{ failing }} failing
-  {%- endif %}</p>
+  {%- endif %}
+  &middot; {{ total_jobs | default('?') }} jobs</p>
 <div style="display: flex; gap: 1rem;
   align-items: start; flex-wrap: wrap;
   margin-bottom: 1rem;">
@@ -154,11 +155,17 @@ def render_status_report(
         for s in statuses.values()
         if s.last_run_ok is False
     )
+    total_jobs = sum(
+        s.last_run_jobs
+        for s in statuses.values()
+        if s.last_run_jobs is not None
+    )
     html = tmpl.render(
         statuses=sorted_statuses,
         generated_at=now.isoformat(),
         total=len(sorted_statuses),
         failing=failing,
+        total_jobs=f"{total_jobs:,}",
         time_ago=_time_ago,
         epoch=_epoch,
         base_css=BASE_CSS,
