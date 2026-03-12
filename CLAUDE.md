@@ -32,7 +32,6 @@ Key files:
 - `job_scraper/scraper/_lever.py` — Lever `scrape_board()` factory
 - `job_scraper/scraper/_gem.py` — Gem `scrape_board()` factory
 - `job_scraper/scraper/_workday.py` — Workday `scrape_board()` factory
-- `boards.toml` — ATS board definitions; copy from `boards.example.toml`
 - `keywords.txt` — FTS5 query groups (`"phrases"`, `AND`/`OR`/`NOT`, `---` group separators); copy from `keywords.example.txt`
 - `preferences.md` — candidate job preferences for interest scoring; copy from `preferences.example.md`
 - `resume.md` — candidate resume for recruiter scoring; copy from `resume.example.md`
@@ -40,10 +39,15 @@ Key files:
 
 ## Adding scrapers
 
-Two ways to add scrapers:
+Drop a `.py` file in `job_scraper/scraper/` (name must not start with `_`). For ATS boards, import the factory and call it:
 
-- **ATS board**: add an entry to `boards.toml` (see `boards.example.toml`)
-- **Ad-hoc**: drop a `.py` file in `job_scraper/scraper/` (name must not start with `_`), implement `async def scrape(http: Http) -> AsyncIterator[Job]`
+```python
+from job_scraper.scraper._greenhouse import scrape_board
+
+scrape = scrape_board("mycompany", name="My Company")
+```
+
+For custom scrapers, implement `async def scrape(http: Http) -> AsyncIterator[Job]`.
 
 ## Style
 

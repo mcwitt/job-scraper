@@ -16,8 +16,6 @@ let
     ;
   cfg = config.services.job-scraper;
   pkg = cfg.package;
-  tomlFormat = pkgs.formats.toml { };
-  boardsFile = tomlFormat.generate "boards.toml" cfg.boards;
 
   # Generate per-user config files in the Nix store
   userFiles =
@@ -41,7 +39,6 @@ let
         "${pkg}/bin/job-scraper"
         "--scrape-only"
         "--status-report"
-        "--boards ${boardsFile}"
         "--cache-dir ${stateDir}/cache"
         "--output-dir ${stateDir}/output"
         "--scrape-ttl ${toString s.scrapeTtl}"
@@ -117,15 +114,6 @@ in
       description = ''
         Path to a file containing the Anthropic API key
         (e.g. ANTHROPIC_API_KEY=sk-...).
-      '';
-    };
-
-    boards = mkOption {
-      type = tomlFormat.type;
-      default = { };
-      description = ''
-        Structured boards config, converted to TOML.
-        Example: { greenhouse = [{ board = "anthropic"; name = "Anthropic"; }]; }
       '';
     };
 
