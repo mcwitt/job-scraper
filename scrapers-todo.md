@@ -88,6 +88,7 @@ US companies to add job board scrapers for.
 
 ## Tech / Consumer
 - [ ] Amazon — custom ATS (amazon.jobs), needs custom scraper
+- [x] Google (custom: careers.google.com)
 - [ ] Uber — custom ATS, needs custom scraper
 - [x] Lyft (greenhouse: lyft)
 - [x] Pinterest (greenhouse: pinterestjobadvertisements)
@@ -118,6 +119,8 @@ US companies to add job board scrapers for.
 - [x] Noon Energy (greenhouse: noonenergy)
 - [x] Energy Vault (lever: EnergyVault)
 - [x] Group14 Technologies (greenhouse: group14)
+- [x] Plus Power (greenhouse: pluspower)
+- [x] FlexGen (rippling: external-job-board)
 
 ## Grid / Demand Response / VPPs
 - [x] Voltus (lever: voltus)
@@ -131,6 +134,10 @@ US companies to add job board scrapers for.
 - [x] Stem Inc (workday: StemInc/wd12)
 - [ ] Enchanted Rock — Paylocity, unsupported ATS
 - [x] Span.IO (ashby: span)
+- [x] RenewHome (workable: renewhome)
+- [x] Octopus Energy (lever: octoenergy) — includes Kraken Technologies
+- [ ] Enel X — Avature ATS (jobs.enel.com), unsupported
+- [ ] Grid United — Breezy HR, unsupported
 
 ## Software / Analytics / Data
 - [ ] WattTime — Trakstar Hire, unsupported ATS
@@ -141,6 +148,12 @@ US companies to add job board scrapers for.
 - [ ] Kevala — Lever API disabled, self-hosted careers page
 - [ ] Aspirity / Bayou Energy — moved to Notion job board
 - [x] Palmetto (greenhouse: palmettocleantech)
+- [x] Watershed (ashby: Watershed)
+- [x] LevelTen (greenhouse: leveltenenergy)
+- [ ] Texture — Gusto job board, unsupported ATS
+- [ ] Pearl St Tech — no ATS, email-based recruiting only
+- [x] Paces (gem: paces)
+- [x] Emerald AI (ashby: emerald-ai)
 
 ## Solar / Wind / Generation
 - [x] Aclima (ashby: aclima)
@@ -153,6 +166,10 @@ US companies to add job board scrapers for.
 - [x] Dandelion Energy (ashby: dandelion)
 - [ ] Fervo Energy — Paylocity, unsupported ATS
 - [ ] Heliogen — acquired by Zeo Energy (2025)
+- [ ] Rune Energy — Polymer ATS (jobs.polymer.co/rune), unsupported
+- [x] Lunar Energy (greenhouse: lunarenergy)
+- [ ] LineVision — Paylocity, unsupported ATS
+- [x] Intersect Power (lever: intersect)
 
 ## EV / Charging / Transport
 - [x] ChargePoint (greenhouse: chargepoint)
@@ -164,6 +181,11 @@ US companies to add job board scrapers for.
 - [x] Bloom Energy (workday: bloomenergy/wd1)
 - [x] Electric Hydrogen (greenhouse: eh2)
 - [x] Mainspring Energy (lever: mainspringenergy)
-- [ ] NET Power — Rippling ATS, unsupported
+- [x] NET Power (rippling: net-power)
 - [x] Redwood Materials (greenhouse: redwoodmaterials)
 - [ ] Li-Cycle — acquired by Glencore (2025)
+- [x] Heirloom Carbon (ashby: heirloomcarbon)
+- [x] KoBold Metals (greenhouse: koboldmetals)
+- [x] Crusoe Energy (ashby: Crusoe)
+- [x] Heron Power (ashby: heron-power)
+- [ ] Engie — SAP SuccessFactors (jobs.engie.com), unsupported ATS
