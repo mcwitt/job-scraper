@@ -149,7 +149,6 @@ async def _run(
     linkedin_dir: Path,
     dedup_fields: tuple[str, ...],
     resume_path: Path,
-    companies_dir: Path,
     scrape_only: bool = False,
     input_jobs: Path | None = None,
     status_report: bool = False,
@@ -242,7 +241,7 @@ async def _run(
         score_interest,
     )
 
-    companies = load_companies(companies_dir)
+    companies = load_companies()
 
     fit_cache_path = cache_dir / "score_fit.jsonl"
     ai = anthropic.AsyncAnthropic()
@@ -353,9 +352,6 @@ def run(
         str,
         typer.Option(help="Comma-separated Job fields for dedup"),
     ] = "title,company,team",
-    companies: Annotated[
-        Path, typer.Option(help="Company context directory")
-    ] = Path("companies"),
     scrape_only: Annotated[
         bool,
         typer.Option("--scrape-only", help="Scrape only, write jobs_raw.jsonl"),
@@ -409,7 +405,6 @@ def run(
             linkedin_dir=linkedin_dir,
             dedup_fields=fields,
             resume_path=resume,
-            companies_dir=companies,
             scrape_only=scrape_only,
             input_jobs=input_jobs,
             status_report=status_report,
