@@ -24,6 +24,7 @@
             httpx
             jinja2
             lxml
+            mistune
             typer
           ]
         );
@@ -89,6 +90,7 @@
               httpx
               jinja2
               lxml
+              mistune
               typer
             ];
           };
