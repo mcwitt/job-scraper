@@ -50,7 +50,15 @@ scrape = scrape_board("mycompany", name="My Company")
 
 For custom scrapers, implement `async def scrape(http: Http) -> AsyncIterator[Job]`.
 
-When adding a scraper for a new company, also add a company context file at `job_scraper/companies/<canonical-name>.md` (where canonical name is lowercase, non-alphanumeric replaced with hyphens).
+When adding a scraper for a new company, also add a company context file at `job_scraper/companies/<canonical-name>.md` (where canonical name is lowercase, non-alphanumeric replaced with hyphens). Company context files should include these sections:
+
+- **Overview** — What the company does, when founded, founder(s), HQ location
+- **Technical Focus** — Key technology areas and platforms (bulleted)
+- **Scale & Stage** — Public/private, funding stage & amount, approximate headcount
+- **Hiring** — What roles look like, hiring bar, culture notes
+- **Recent Context** — Latest news, partnerships, product launches
+
+Search the web for up-to-date information. See existing files in `job_scraper/companies/` for examples of proper formatting and length (~30-45 lines, hard-wrapped at ~65 chars).
 
 ## Style
 
