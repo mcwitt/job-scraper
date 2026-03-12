@@ -32,6 +32,8 @@ Key files:
 - `job_scraper/scraper/_lever.py` — Lever `scrape_board()` factory
 - `job_scraper/scraper/_gem.py` — Gem `scrape_board()` factory
 - `job_scraper/scraper/_workday.py` — Workday `scrape_board()` factory
+- `job_scraper/scraper/_icims.py` — iCIMS Attract `scrape_board()` factory
+- `job_scraper/scraper/_phenom.py` — Phenom People `scrape_board()` factory
 - `keywords.txt` — FTS5 query groups (`"phrases"`, `AND`/`OR`/`NOT`, `---` group separators); copy from `keywords.example.txt`
 - `preferences.md` — candidate job preferences for interest scoring; copy from `preferences.example.md`
 - `resume.md` — candidate resume for recruiter scoring; copy from `resume.example.md`
