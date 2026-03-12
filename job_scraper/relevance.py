@@ -61,13 +61,17 @@ def score_relevance(
                     "SELECT rowid, bm25(docs, 5.0, 1.0)"
                     " FROM docs WHERE docs MATCH ?",
                     (query,),
-                )
+                ).fetchall()
             except sqlite3.OperationalError as e:
                 raise ValueError(
                     f"Bad FTS5 query: {query!r}"
                 ) from e
+            # Normalize within this group so each group
+            # contributes on a 0-1 scale before MAX.
+            group_max = max((-bm25 for _, bm25 in rows), default=0.0)
             for rowid, bm25 in rows:
-                scores[rowid] = max(scores[rowid], -bm25)
+                normalized = -bm25 / group_max if group_max else 0.0
+                scores[rowid] = max(scores[rowid], normalized)
     finally:
         conn.close()
 
