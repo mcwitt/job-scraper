@@ -150,6 +150,7 @@ async def _run(
     linkedin_dir: Path,
     dedup_fields: tuple[str, ...],
     resume_path: Path,
+    companies_dir: Path,
     boards_path: Path = Path("boards.toml"),
     scrape_only: bool = False,
     input_jobs: Path | None = None,
@@ -236,11 +237,14 @@ async def _run(
 
     import anthropic
 
+    from job_scraper.companies import load_companies
     from job_scraper.models import Score, ScoredJob, scored_job
     from job_scraper.scorer import (
         score_fit,
         score_interest,
     )
+
+    companies = load_companies(companies_dir)
 
     fit_cache_path = cache_dir / "score_fit.jsonl"
     ai = anthropic.AsyncAnthropic()
@@ -254,6 +258,7 @@ async def _run(
             model,
             batch_size,
             interest_cache,
+            companies=companies,
         )
 
     resume_text = resume_path.read_text()
@@ -266,6 +271,7 @@ async def _run(
             model,
             batch_size,
             fit_cache,
+            companies=companies,
         )
 
     # Merge into ScoredJob objects
@@ -349,6 +355,9 @@ def run(
         str,
         typer.Option(help="Comma-separated Job fields for dedup"),
     ] = "title,company,team",
+    companies: Annotated[
+        Path, typer.Option(help="Company context directory")
+    ] = Path("companies"),
     boards: Annotated[
         Path, typer.Option(help="Path to boards.toml")
     ] = Path("boards.toml"),
@@ -405,6 +414,7 @@ def run(
             linkedin_dir=linkedin_dir,
             dedup_fields=fields,
             resume_path=resume,
+            companies_dir=companies,
             boards_path=boards,
             scrape_only=scrape_only,
             input_jobs=input_jobs,

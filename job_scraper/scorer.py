@@ -12,9 +12,48 @@ from anthropic.types import (
     TextBlock,
 )
 
+from job_scraper.companies import canonicalize
 from job_scraper.models import Job
 
 logger = logging.getLogger(__name__)
+
+
+def _format_listing(job: Job) -> str:
+    return (
+        f"**{job.title}** at **{job.company}**\n"
+        f"Location: {job.location or 'Not specified'}\n"
+        f"Team: {job.team or 'Not specified'}\n\n"
+        f"{job.description[:3000]}"
+    )
+
+
+def _company_section(
+    companies: dict[str, str], jobs: list[Job]
+) -> str:
+    """Build company context section for unique companies in batch."""
+    seen: dict[str, tuple[str, str]] = {}
+    for job in jobs:
+        canon = canonicalize(job.company)
+        if canon not in seen and canon in companies:
+            seen[canon] = (job.company, companies[canon])
+    if not seen:
+        return ""
+    parts = [
+        f"### {name}\n\n{content}" for name, content in seen.values()
+    ]
+    return "\n\n## Company Context\n\n" + "\n\n".join(parts)
+
+
+def _job_cache_key(
+    system_prompt: str,
+    context: str,
+    job: Job,
+    company_context: str,
+) -> str:
+    """Compute a per-job cache key from all inputs relevant to this job."""
+    listing = _format_listing(job)
+    raw = f"{system_prompt}\n{context}\n{company_context}\n{listing}"
+    return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 
 async def score_batch(
@@ -24,6 +63,7 @@ async def score_batch(
     model: str,
     semaphore: asyncio.Semaphore,
     system_prompt: str,
+    companies: dict[str, str],
 ) -> dict[str, tuple[float, str]]:
     """Score a batch of jobs in a single API call.
 
@@ -32,22 +72,20 @@ async def score_batch(
     """
     listings = []
     for i, job in enumerate(jobs):
-        listings.append(
-            f"### {i}\n"
-            f"**{job.title}** at **{job.company}**\n"
-            f"Location: {job.location or 'Not specified'}\n"
-            f"Team: {job.team or 'Not specified'}\n\n"
-            f"{job.description[:3000]}"
-        )
+        listings.append(f"### {i}\n" + _format_listing(job))
 
-    user_msg = "Score the following job postings:\n\n" + "\n\n---\n\n".join(listings)
+    company_section = _company_section(companies, jobs)
+    system = system_prompt.format(context=context) + company_section
+    user_msg = "Score the following job postings:\n\n" + "\n\n---\n\n".join(
+        listings
+    )
 
     async with semaphore:
         response = await client.messages.create(
             model=model,
             max_tokens=16384,
             thinking={"type": "enabled", "budget_tokens": 4096},
-            system=system_prompt.format(context=context),
+            system=system,
             messages=[{"role": "user", "content": user_msg}],
             output_config=OutputConfigParam(
                 format=JSONOutputFormatParam(
@@ -96,6 +134,7 @@ async def score_jobs(
         Callable[[str, dict[str, Any]], None],
     ],
     system_prompt: str,
+    companies: dict[str, str],
     max_concurrent: int = 10,
 ) -> dict[str, tuple[float, str]]:
     """Score jobs, using cache to skip already-scored ones.
@@ -108,14 +147,13 @@ async def score_jobs(
     results: dict[str, tuple[float, str]] = {}
     to_score: list[Job] = []
 
-    # Hash the formatted prompt so edits invalidate cached scores
-    formatted = system_prompt.format(context=context)
-    context_hash = hashlib.sha256(
-        formatted.encode()
-    ).hexdigest()[:12]
-
+    # Per-job cache keys based on inputs relevant to each job
+    job_keys: dict[str, str] = {}
     for job in jobs:
-        key = f"{job.hash}:{context_hash}"
+        co_ctx = companies.get(canonicalize(job.company), "")
+        key = _job_cache_key(system_prompt, context, job, co_ctx)
+        job_keys[job.hash] = key
+
         cached = cache_get(key)
         if cached is not None:
             results[job.hash] = (cached["score"], cached["why"])
@@ -127,7 +165,8 @@ async def score_jobs(
         return results
 
     batches = [
-        to_score[i : i + batch_size] for i in range(0, len(to_score), batch_size)
+        to_score[i : i + batch_size]
+        for i in range(0, len(to_score), batch_size)
     ]
     logger.info(
         "scoring jobs=%d cached=%d batches=%d",
@@ -136,12 +175,22 @@ async def score_jobs(
         len(batches),
     )
 
+    # Log companies without context files
+    missing = {
+        job.company
+        for job in to_score
+        if canonicalize(job.company) not in companies
+    }
+    for name in sorted(missing):
+        logger.warning("no company context company=%r", name)
+
     async def run_batch(
         batch_num: int, batch: list[Job]
     ) -> dict[str, tuple[float, str]]:
         logger.info("batch=%d jobs=%d", batch_num, len(batch))
         scores = await score_batch(
-            batch, context, client, model, semaphore, system_prompt
+            batch, context, client, model, semaphore,
+            system_prompt, companies,
         )
         for job in batch:
             score_data = scores.get(job.hash)
@@ -155,12 +204,14 @@ async def score_jobs(
                 continue
             score, why = score_data
             cache_put(
-                f"{job.hash}:{context_hash}",
+                job_keys[job.hash],
                 {"score": score, "why": why},
             )
         return scores
 
-    batch_tasks = [run_batch(i + 1, batch) for i, batch in enumerate(batches)]
+    batch_tasks = [
+        run_batch(i + 1, batch) for i, batch in enumerate(batches)
+    ]
     for batch_scores in await asyncio.gather(*batch_tasks):
         results.update(batch_scores)
 
@@ -177,6 +228,7 @@ async def score_interest(
         Callable[[str], dict[str, Any] | None],
         Callable[[str, dict[str, Any]], None],
     ],
+    companies: dict[str, str] | None = None,
     max_concurrent: int = 10,
 ) -> dict[str, tuple[float, str]]:
     return await score_jobs(
@@ -225,6 +277,7 @@ Write "why" as a brief justification before assigning the score.
 
 {context}
 """,
+        companies=companies or {},
         max_concurrent=max_concurrent,
     )
 
@@ -239,6 +292,7 @@ async def score_fit(
         Callable[[str], dict[str, Any] | None],
         Callable[[str, dict[str, Any]], None],
     ],
+    companies: dict[str, str] | None = None,
     max_concurrent: int = 10,
 ) -> dict[str, tuple[float, str]]:
     return await score_jobs(
@@ -289,5 +343,6 @@ Write "why" as a brief justification before assigning the score.
 
 {context}
 """,
+        companies=companies or {},
         max_concurrent=max_concurrent,
     )
