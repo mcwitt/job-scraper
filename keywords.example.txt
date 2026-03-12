@@ -1,20 +1,36 @@
 # FTS5 query syntax: "phrases", AND/OR/NOT, (grouping)
 # Lines within a group are concatenated; --- separates groups (score = max across groups)
+#
+# Column filters: prefix a term with title: or description: to restrict
+# matching to that column. Useful for:
+#
+#   Role titles — scope to title to avoid matching body text mentions:
+#     title:"software engineer"    matches "Software Engineer, Platform"
+#     title:"research scientist"   matches "Senior Research Scientist"
+#
+#   Exclusions — title-scoped NOTs are more precise than full-text NOTs:
+#     NOT title:manager            excludes "Manager, Applied AI Engineering"
+#     NOT title:intern             excludes intern roles without filtering
+#                                  jobs that mention "mentoring interns"
+#     NOT title:frontend           excludes all frontend title variants
+#
+#   Domain/technology terms should stay unscoped (match anywhere):
+#     "distributed systems"        often in descriptions, not titles
+#     CUDA OR TPU                  technology terms in body text
 
 # Group 1: Backend / Platform
-("software engineer" OR "backend engineer" OR "platform engineer")
-AND ("senior engineer" OR "staff engineer")
-NOT intern NOT internship
+(title:"software engineer" OR title:"backend engineer" OR title:"platform engineer")
+NOT title:intern NOT title:internship NOT title:manager NOT title:director
 ---
 # Group 2: Infrastructure
 ("distributed systems" OR microservices OR "API design")
 AND ("cloud infrastructure" OR Kubernetes OR "site reliability")
-NOT intern NOT internship
+NOT title:intern NOT title:internship NOT title:manager NOT title:director
 ---
 # Group 3: Languages
 (Python OR Go OR Java OR PostgreSQL OR Redis OR Kafka)
-NOT intern NOT internship
+NOT title:intern NOT title:internship NOT title:manager NOT title:director
 ---
 # Group 4: ML/AI
 ("machine learning" OR "ML engineering" OR "model deployment" OR PyTorch)
-NOT intern NOT internship
+NOT title:intern NOT title:internship NOT title:manager NOT title:director
