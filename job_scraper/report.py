@@ -1,7 +1,9 @@
 from datetime import UTC, datetime
 from pathlib import Path
 
+import mistune
 from jinja2 import Environment
+from markupsafe import Markup
 
 from job_scraper._report_base import (
     BASE_CSS,
@@ -9,6 +11,7 @@ from job_scraper._report_base import (
     _epoch,
     _time_ago,
 )
+from job_scraper.companies import canonicalize, load_companies
 from job_scraper.linkedin import (
     Connection,
     LookupFn,
@@ -43,6 +46,15 @@ TEMPLATE = """\
   .tip:hover .tip-body,
   .tip.active .tip-body { display: block; }
   .tip-score .tip-body { min-width: 320px; }
+  .tip-company .tip-body { max-width: 520px;
+    max-height: 400px; overflow-y: auto; }
+  .tip-company .tip-body h1,
+  .tip-company .tip-body h2 {
+    font-size: 0.95em; margin: 0.6rem 0 0.2rem; }
+  .tip-company .tip-body h1:first-child,
+  .tip-company .tip-body h2:first-child {
+    margin-top: 0; }
+  .tip-company .tip-body p { margin: 0.3rem 0; }
   .tip-body ul { margin: 0;
     padding-left: 1.2em; }
   .tip-body li { margin: 0.15rem 0; }
@@ -152,7 +164,16 @@ TEMPLATE = """\
         <a href="{{ job.url }}">
           {{- job.title -}}
         </a></td>
+      {% set ctx = company_ctx.get(
+        job.company) %}
+      {% if ctx %}
+      <td class="cell tip tip-company">
+        {{ job.company }}
+        <div class="tip-body">{{ ctx }}</div>
+      </td>
+      {% else %}
       <td class="cell">{{ job.company }}</td>
+      {% endif %}
       <td class="conns tip"
         data-sort="{{ first | length }}">
         {{- first | length or "" -}}
@@ -283,6 +304,22 @@ def _no_connections(
     return [], []
 
 
+def _build_company_ctx(
+    jobs: list[ScoredJob],
+) -> dict[str, Markup]:
+    canonical = load_companies()
+    md = mistune.create_markdown()
+    ctx: dict[str, Markup] = {}
+    for job in jobs:
+        name = job.company
+        if name in ctx:
+            continue
+        content = canonical.get(canonicalize(name))
+        if content:
+            ctx[name] = Markup(md(content))  # noqa: S704
+    return ctx
+
+
 def render_report(
     jobs: list[ScoredJob],
     path: Path,
@@ -299,6 +336,7 @@ def render_report(
         time_ago=_time_ago,
         epoch=_epoch,
         lookup=lookup or _no_connections,
+        company_ctx=_build_company_ctx(jobs),
         base_css=BASE_CSS,
         base_js=BASE_JS,
     )

@@ -62,6 +62,7 @@ US companies to add job board scrapers for.
 - [x] SandboxAQ (ashby: sandboxaq)
 - [x] Schrödinger (greenhouse: schrdinger)
 - [ ] Insilico Medicine — email-based recruiting only, no ATS
+- [x] Insitro (ashby: insitro)
 - [x] Relay Therapeutics (greenhouse: relaytherapeutics)
 
 ## Autonomy / Robotics

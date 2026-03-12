@@ -13,6 +13,7 @@ dependencies = [
     "httpx",
     "jinja2",
     "lxml",
+    "mistune",
     "typer",
 ]
 
