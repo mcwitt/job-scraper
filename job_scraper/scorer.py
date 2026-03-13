@@ -22,8 +22,9 @@ def _format_listing(job: Job) -> str:
     return (
         f"**{job.title}** at **{job.company}**\n"
         f"Location: {job.location or 'Not specified'}\n"
+        f"Compensation: {job.comp or 'Not specified'}\n"
         f"Team: {job.team or 'Not specified'}\n\n"
-        f"{job.description[:3000]}"
+        f"{job.description[:8000]}"
     )
 
 
