@@ -42,17 +42,24 @@ US companies to add job board scrapers for.
 - [x] Anyscale (lever: anyscale)
 - [x] Baseten (ashby: baseten)
 - [x] Databricks (greenhouse: databricks)
+- [x] Fireworks AI (greenhouse: fireworksai)
 - [x] Modal (ashby: modal)
 - [x] Modular (gem: modular)
+- [x] Together AI (greenhouse: togetherai)
 - [ ] Weights & Biases — acquired by CoreWeave, roles on coreweave Greenhouse board
 - [ ] Replicate — acquired by Cloudflare (2025), no independent careers page
 - [x] Hugging Face (workable: huggingface)
 - [x] Snowflake (phenom: careers.snowflake.com)
+- [ ] Lepton AI — acquired by NVIDIA (2025), no independent careers page
 
 ## AI for Science / Biotech
 - [x] Atomic AI (greenhouse: atomai)
+- [x] Chai Discovery (ashby: chaidiscovery)
 - [x] Cradle (ashby: cradlebio)
+- [x] EvolutionaryScale (greenhouse: evolutionaryscale)
+- [x] Generate Biomedicines (greenhouse: generatebiomedicines)
 - [x] Genesis Therapeutics (ashby: genesis-therapeutics)
+- [x] Iambic Therapeutics (ashby: iambic-therapeutics)
 - [x] Isomorphic Labs (greenhouse: isomorphiclabs)
 - [x] Lila Sciences (greenhouse: lilasciences)
 - [x] Periodic Labs (ashby: periodic-labs)
@@ -61,9 +68,13 @@ US companies to add job board scrapers for.
 - [x] Recursion (greenhouse: recursionpharmaceuticals)
 - [x] SandboxAQ (ashby: sandboxaq)
 - [x] Schrödinger (greenhouse: schrdinger)
+- [x] Terray Therapeutics (rippling: terraytx)
+- [x] Valence Labs (greenhouse: valencelabs) — Recursion's ML research arm, Montreal
+- [ ] D.E. Shaw Research — custom ATS (apply.deshawresearch.com), needs custom scraper
 - [ ] Insilico Medicine — email-based recruiting only, no ATS
 - [x] Insitro (ashby: insitro)
 - [x] Relay Therapeutics (greenhouse: relaytherapeutics)
+- [ ] Charm Therapeutics — Recruitee (embedded widget on charmtx.com), unsupported ATS
 
 ## Autonomy / Robotics
 - [x] Waymo (greenhouse: waymo)
@@ -81,10 +92,15 @@ US companies to add job board scrapers for.
 - [x] Semgrep (ashby: semgrep)
 - [ ] Snyk — moved to Workday, tenant slug unknown
 
+## Research Orgs
+- [x] AI2 (greenhouse: thealleninstitute)
+
 ## Open-Source Consulting
 - [x] Quansight (greenhouse: quansight)
 - [x] OpenTeams (greenhouse: openteams)
 - [x] Astral (ashby: astral)
+- [x] Modus Create (greenhouse: moduscreate) — includes Tweag (Haskell/Nix)
+- [ ] Unison Computing — email-only (jobs@unison.cloud), not currently hiring
 
 ## Tech / Consumer
 - [ ] Amazon — custom ATS (amazon.jobs), needs custom scraper
