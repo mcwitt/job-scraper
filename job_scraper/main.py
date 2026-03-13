@@ -336,7 +336,7 @@ def run(
         bool, typer.Option("--report", help="Generate HTML report")
     ] = False,
     keywords: Annotated[Path, typer.Option(help="Path to keywords file")] = Path(
-        "keywords.txt"
+        "keywords"
     ),
     top_k: Annotated[
         int,

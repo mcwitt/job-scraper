@@ -23,7 +23,7 @@ let
     let
       preferencesFile = pkgs.writeText "${name}-preferences.md" ucfg.preferences;
       resumeFile = pkgs.writeText "${name}-resume.md" ucfg.resume;
-      keywordsFile = pkgs.writeText "${name}-keywords.txt" ucfg.keywords;
+      keywordsFile = pkgs.writeText "${name}-keywords" ucfg.keywords;
     in
     {
       inherit preferencesFile resumeFile keywordsFile;

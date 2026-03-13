@@ -31,7 +31,7 @@ pip install -e .
 Copy and customize the personal config files (see [Configuration files](#configuration-files) for details):
 
 ```bash
-cp keywords.example.txt keywords.txt
+cp keywords.example keywords
 cp preferences.example.md preferences.md
 cp resume.example.md resume.md
 ```
@@ -82,7 +82,7 @@ Every `.py` file in `job_scraper/scraper/` whose name does not start with `_` is
 | Module | Purpose |
 |--------|---------|
 | `job_scraper/main.py` | CLI (Typer) and pipeline orchestration |
-| `job_scraper/relevance.py` | FTS5 relevance scoring against `keywords.txt` |
+| `job_scraper/relevance.py` | FTS5 relevance scoring against `keywords` |
 | `job_scraper/scorer.py` | Claude scoring with extended thinking |
 | `job_scraper/cache.py` | JSONL append-log cache with TTL |
 | `job_scraper/models.py` | `Job` / `ScoredJob` frozen dataclasses |
@@ -120,13 +120,13 @@ async def scrape(http: Http) -> AsyncIterator[Job]:
 
 All personal config files are gitignored. Copy from `*.example.*` to get started.
 
-### `keywords.txt` — relevance prefilter
+### `keywords` — relevance prefilter
 
 Used in the **FTS5 relevance filter** step to cheaply discard irrelevant jobs before LLM scoring. This is a SQLite FTS5 query file — jobs that don't match any group are filtered out entirely, so the LLM only sees jobs that passed at least one keyword group.
 
 Syntax: `"phrases"`, `AND`/`OR`/`NOT`, `(grouping)`. Groups are separated by `---`; a job's relevance score is the max across all groups. Prefix terms with `title:` or `description:` to restrict matching to that column.
 
-See `keywords.example.txt` for a full example.
+See `keywords.example` for a full example.
 
 ### `preferences.md` — interest scoring
 
@@ -166,14 +166,14 @@ Add the flake as an input and import the module:
             users.alice = {
               preferences = builtins.readFile ./alice/preferences.md;
               resume = builtins.readFile ./alice/resume.md;
-              keywords = builtins.readFile ./alice/keywords.txt;
+              keywords = builtins.readFile ./alice/keywords;
               linkedinConnectionsDir = ./alice/linkedin;
             };
 
             users.bob = {
               preferences = builtins.readFile ./bob/preferences.md;
               resume = builtins.readFile ./bob/resume.md;
-              keywords = builtins.readFile ./bob/keywords.txt;
+              keywords = builtins.readFile ./bob/keywords;
             };
           };
         }
