@@ -2,42 +2,40 @@
 
 ## Overview
 
-AI company focused on mathematical superintelligence, building systems that
-can perform formal mathematical reasoning with verifiable correctness.
-Co-founded in 2023 by Vlad Tenev (Robinhood CEO) and Tudor Achim. Their
-flagship product Aristotle uses the Lean 4 proof assistant to translate
-natural-language math into formally verifiable proofs.
+AI theorem proving startup building "Mathematical
+Superintelligence" (MSI). Founded 2023 by Tudor Achim
+(ex-CTO of Helm.ai, Stanford/CMU) and Vlad Tenev
+(co-founder/CEO of Robinhood). HQ in Palo Alto, CA.
 
 ## Technical Focus
 
-- Formal mathematical reasoning and automated theorem proving
-- Lean 4 proof assistant integration for verification
-- Large language models fine-tuned for mathematical reasoning
-- Code generation with formal verification guarantees
+- Formal theorem proving using the Lean language
+- Flagship model "Aristotle" — IMO gold-medal level
+  performance on mathematical reasoning
+- Verified code synthesis (96.8% on VERINA benchmark)
+- Open-source tooling (python-memtools, pbcc protobuf
+  compiler)
 
 ## Scale & Stage
 
-Private, Series C. Raised $120M Series C in November 2025 at $1.45B
-valuation (led by Ribbit Capital, with Sequoia, Kleiner Perkins, and Index
-Ventures). $295M total raised across three rounds in 14 months. Small team
-(estimated 30-50 employees). Based in Palo Alto.
+- Private, unicorn valuation ($1.45B)
+- Series C: $120M (Nov 2025, Ribbit Capital)
+- Total raised: ~$295M across 3 rounds in 14 months
+- Investors: Sequoia, Kleiner Perkins, Index Ventures,
+  Paradigm, Emerson Collective, NVIDIA NVentures
+- Team ~30-100, expanding
 
 ## Hiring
 
-Research-intensive organization hiring mathematicians, ML researchers, and
-systems engineers with backgrounds in formal methods, theorem proving, or
-mathematical AI. Experience with Lean, Coq, or similar proof assistants is
-highly relevant. Strong academic credentials in mathematics or formal
-verification are valued.
-
-The rapid fundraising pace ($295M in 14 months) and unicorn valuation
-suggest aggressive hiring plans. Nvidia's NVentures also backed the company,
-indicating interest in hardware-optimized reasoning workloads.
+- Research Engineers (formal methods, RL), Software
+  Engineers, Frontend Engineers
+- All roles on-site in Palo Alto
+- High-intensity culture, not a standard 9-5
 
 ## Recent Context
 
-Aristotle achieved Gold Medal-level performance at the 2025 International
-Mathematical Olympiad and state-of-the-art 96.8% on the Verifiable Code
-Generation Arena benchmark. Nvidia's NVentures backed Harmonic in early 2026.
-Three funding rounds in 14 months brought total capital to $295M at a $1.45B
-valuation.
+- $300K donation to Lean FRO (Feb 2026)
+- $1M mathematician sponsorship program (Jan 2026)
+- Open-sourced python-memtools (Jan 2026)
+- Aristotle iOS app beta (Jul 2025)
+- NVIDIA NVentures investment (Jan 2026)
