@@ -22,6 +22,9 @@ US companies to add job board scrapers for.
 - [x] World Labs (greenhouse: worldlabs)
 - [x] Runway (greenhouse: runwayml)
 - [x] Symbolica AI (greenhouse: symbolica)
+- [x] Genesis AI (ashby: genesis-ai) — physical AI / robotics world models
+- [x] Hippocratic AI (ashby: Hippocratic AI) — healthcare LLM agents
+- [x] Odyssey (ashby: odysseyml) — general-purpose world models
 
 ## Hardware / Inference / Compute
 - [x] NVIDIA (workday: nvidia/wd5)
@@ -42,6 +45,7 @@ US companies to add job board scrapers for.
 - [x] Rigetti (lever: rigetti)
 - [x] TensorWave (ashby: tensorwave)
 - [x] Positron AI (rippling: positron)
+- [x] MatX (greenhouse: matx) — LLM-optimized AI chips
 
 ## ML Infra / Platforms
 - [x] Anyscale (lever: anyscale)
@@ -58,6 +62,7 @@ US companies to add job board scrapers for.
 - [ ] Lepton AI — acquired by NVIDIA (2025), no independent careers page
 - [x] BentoML (ashby: bentoml)
 - [ ] Lamini AI — Lever board deactivated, site unreachable
+- [x] Granica (ashby: granica) — AI data readiness / optimization platform
 
 ## AI for Science / Biotech
 - [x] Atomic AI (greenhouse: atomai)
@@ -100,11 +105,13 @@ US companies to add job board scrapers for.
 - [x] Zoox (lever: zoox)
 - [x] Zipline (greenhouse: flyzipline)
 - [x] Rivian (icims: careers.rivian.com)
+- [ ] Tesla — custom ATS (tesla.com/careers), needs custom scraper
 
 ## Developer Tools / Security
 - [x] Cloudflare (greenhouse: cloudflare)
 - [x] Semgrep (ashby: semgrep)
 - [ ] Snyk — moved to Workday, tenant slug unknown
+- [x] CertiK (lever: certik) — blockchain security / smart contract auditing
 
 ## Research Orgs
 - [x] AI2 (greenhouse: thealleninstitute)
@@ -131,6 +138,11 @@ US companies to add job board scrapers for.
 - [x] Mercury (greenhouse: mercury)
 - [x] Bitnomial (ashby: bitnomial)
 - [x] PromptQL / Hasura (gem: promptql)
+- [x] Reasonable AI (workable: reasonable) — reasoning systems / research copilot
+- [x] CircuitHub (ashby: circuithub) — on-demand electronics manufacturing (Haskell stack)
+- [ ] Stellon Labs — Notion-based job listings, no supported ATS
+- [ ] Kaon Interactive — custom careers page (kaon.com/careers), no supported ATS
+- [ ] Holland & Hart — Florecruit + UltiPro ATS, neither supported
 
 ---
 
@@ -138,7 +150,6 @@ US companies to add job board scrapers for.
 
 ## Energy Storage / Batteries
 - [x] Form Energy (ashby: formenergy)
-- [ ] Tesla Energy — custom ATS (tesla.com/careers), needs custom scraper
 - [x] Fluence Energy (workable: fluence)
 - [ ] ESS Inc — unknown ATS
 - [x] Eos Energy (workday: EoS/wd1)
