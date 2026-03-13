@@ -2,21 +2,53 @@
 
 Scrape job postings from ATS platforms, score them against candidate preferences using Claude, and output ranked results.
 
-## Setup
+## Installation
 
-Requires [Nix](https://nixos.org/) with flakes enabled.
+Requires Python 3.13+.
 
 ```bash
-# Enter dev shell (or use direnv)
-nix develop
+# Clone the repository
+git clone https://github.com/you/job-scraper.git
+cd job-scraper
 
-# Copy and customize personal config files
+# Create and activate a virtual environment
+python -m venv .venv
+source .venv/bin/activate   # Linux/macOS
+# .venv\Scripts\activate    # Windows
+
+# Install the package
+pip install .
+```
+
+For development (editable install):
+
+```bash
+pip install -e .
+```
+
+### Configuration
+
+Copy and customize the personal config files:
+
+```bash
 cp keywords.example.txt keywords.txt
 cp preferences.example.md preferences.md
 cp resume.example.md resume.md
 ```
 
-Set `ANTHROPIC_API_KEY` in your environment (e.g. in `.envrc`) for LLM scoring.
+Set `ANTHROPIC_API_KEY` in your environment for LLM scoring:
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+```
+
+### Nix
+
+Alternatively, if you use [Nix](https://nixos.org/) with flakes:
+
+```bash
+nix develop    # or use direnv
+```
 
 ## Usage
 
@@ -149,6 +181,16 @@ This sets up:
 Trigger manually with `systemctl start job-scraper.service`.
 
 ## Development
+
+```bash
+pip install -e .
+
+# Lint and type-check
+ruff check .
+pyrefly check
+```
+
+With Nix:
 
 ```bash
 nix develop        # enter dev shell
