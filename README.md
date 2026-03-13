@@ -118,13 +118,23 @@ async def scrape(http: Http) -> AsyncIterator[Job]:
 
 ## Configuration files
 
-All personal config files are gitignored. Copy from `*.example.*` to get started:
+All personal config files are gitignored. Copy from `*.example.*` to get started.
 
-| File | Purpose |
-|------|---------|
-| `keywords.txt` | FTS5 query groups for relevance filtering |
-| `preferences.md` | What the candidate is looking for in a job |
-| `resume.md` | Candidate resume for recruiter-fit scoring |
+### `keywords.txt` — relevance prefilter
+
+Used in the **FTS5 relevance filter** step to cheaply discard irrelevant jobs before LLM scoring. This is a SQLite FTS5 query file — jobs that don't match any group are filtered out entirely, so the LLM only sees jobs that passed at least one keyword group.
+
+Syntax: `"phrases"`, `AND`/`OR`/`NOT`, `(grouping)`. Groups are separated by `---`; a job's relevance score is the max across all groups. Prefix terms with `title:` or `description:` to restrict matching to that column.
+
+See `keywords.example.txt` for a full example.
+
+### `preferences.md` — interest scoring
+
+Describes what you're looking for in your next role: target titles, ideal characteristics, dealbreakers, and location constraints. Claude reads this alongside each job posting to produce an **interest score** — how excited you would be about the role based on your stated aspirations and preferences.
+
+### `resume.md` — recruiter-fit scoring
+
+Your resume in Markdown. Claude reads this alongside each job posting to produce a **fit score** — how likely a recruiter would be to advance your application based on your background and experience. This is scored independently from interest so you can see roles you'd love but might be a stretch, and roles you're qualified for but might not want.
 
 ## NixOS deployment
 
