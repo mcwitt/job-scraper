@@ -18,7 +18,7 @@ python -m job_scraper.main
 
 Key files:
 - `job_scraper/main.py` — CLI (Typer) and pipeline orchestration
-- `job_scraper/relevance.py` — FTS5 relevance scoring against keywords.txt
+- `job_scraper/relevance.py` — FTS5 relevance scoring against keywords
 - `job_scraper/scorer.py` — Claude scoring with extended thinking and structured output
 - `job_scraper/companies/` — company context package (bundled `.md` files + `canonicalize`/`load_companies`)
 - `job_scraper/cache.py` — JSONL append-log cache with TTL
@@ -35,7 +35,7 @@ Key files:
 - `job_scraper/scraper/icims.py` — iCIMS Attract `scrape_board()` factory
 - `job_scraper/scraper/phenom.py` — Phenom People `scrape_board()` factory
 - `job_scraper/scraper/rippling.py` — Rippling `scrape_board()` factory
-- `keywords.txt` — FTS5 query groups (`"phrases"`, `AND`/`OR`/`NOT`, `---` group separators); copy from `keywords.example.txt`
+- `keywords` — FTS5 query groups (`"phrases"`, `AND`/`OR`/`NOT`, `---` group separators); copy from `keywords.example`
 - `preferences.md` — candidate job preferences for interest scoring; copy from `preferences.example.md`
 - `resume.md` — candidate resume for recruiter scoring; copy from `resume.example.md`
 
