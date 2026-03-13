@@ -61,6 +61,9 @@ python -m job_scraper.main --report
 
 # Customize scoring model and batch size
 python -m job_scraper.main --model claude-haiku-4-5-20251001 --batch-size 20
+
+# Keep only the top 50 jobs by relevance (default: 100)
+python -m job_scraper.main --top-k 50
 ```
 
 Output goes to `data/output/` by default:
