@@ -19,6 +19,9 @@ US companies to add job board scrapers for.
 - [x] Poolside (ashby: poolside)
 - [x] Liquid AI (ashby: liquid-ai)
 - [x] Sierra (ashby: sierra)
+- [x] World Labs (greenhouse: worldlabs)
+- [x] Runway (greenhouse: runwayml)
+- [x] Symbolica AI (greenhouse: symbolica)
 
 ## Hardware / Inference / Compute
 - [x] NVIDIA (workday: nvidia/wd5)
@@ -37,6 +40,8 @@ US companies to add job board scrapers for.
 - [x] Mythic AI (lever: mythic-ai.com)
 - [x] Lightmatter (greenhouse: lightmatter)
 - [x] Rigetti (lever: rigetti)
+- [x] TensorWave (ashby: tensorwave)
+- [x] Positron AI (rippling: positron)
 
 ## ML Infra / Platforms
 - [x] Anyscale (lever: anyscale)
@@ -51,6 +56,8 @@ US companies to add job board scrapers for.
 - [x] Hugging Face (workable: huggingface)
 - [x] Snowflake (phenom: careers.snowflake.com)
 - [ ] Lepton AI — acquired by NVIDIA (2025), no independent careers page
+- [x] BentoML (ashby: bentoml)
+- [ ] Lamini AI — Lever board deactivated, site unreachable
 
 ## AI for Science / Biotech
 - [x] Atomic AI (greenhouse: atomai)
@@ -75,6 +82,13 @@ US companies to add job board scrapers for.
 - [x] Insitro (ashby: insitro)
 - [x] Relay Therapeutics (greenhouse: relaytherapeutics)
 - [ ] Charm Therapeutics — Recruitee (embedded widget on charmtx.com), unsupported ATS
+- [x] Profluent Bio (greenhouse: profluent)
+- [x] Altos Labs (greenhouse: altoslabs)
+- [x] Xaira Therapeutics (greenhouse: xairatherapeutics)
+- [x] Inceptive (greenhouse: inceptive)
+- [x] Latent Labs (ashby: latentlabs)
+- [x] GenBio AI (lever: genbio)
+- [ ] Citrine Informatics — Lever board deactivated, ATS unknown
 
 ## Autonomy / Robotics
 - [x] Waymo (greenhouse: waymo)
@@ -115,6 +129,8 @@ US companies to add job board scrapers for.
 - [x] Galois (workable: galois)
 - [x] Jane Street (greenhouse: janestreet)
 - [x] Mercury (greenhouse: mercury)
+- [x] Bitnomial (ashby: bitnomial)
+- [x] PromptQL / Hasura (gem: promptql)
 
 ---
 
@@ -154,6 +170,9 @@ US companies to add job board scrapers for.
 - [x] Octopus Energy (lever: octoenergy) — includes Kraken Technologies
 - [ ] Enel X — Avature ATS (jobs.enel.com), unsupported
 - [ ] Grid United — Breezy HR, unsupported
+
+## Grid Software / Energy AI
+- [x] Gridmatic (lever: gridmatic)
 
 ## Software / Analytics / Data
 - [ ] WattTime — Trakstar Hire, unsupported ATS
@@ -205,3 +224,14 @@ US companies to add job board scrapers for.
 - [x] Crusoe Energy (ashby: Crusoe)
 - [x] Heron Power (ashby: heron-power)
 - [ ] Engie — SAP SuccessFactors (jobs.engie.com), unsupported ATS
+
+## Fusion Energy
+- [x] Helion Energy (ashby: helion)
+- [x] Commonwealth Fusion Systems (lever: cfsenergy)
+- [x] Zap Energy (rippling: zap-energy-careers)
+- [ ] TAE Technologies (ashby: taetechnologies) — needs verification
+- [ ] General Fusion — ADP Workforce Now, unsupported ATS
+- [ ] Type One Energy — unknown ATS
+
+## Nuclear
+- [x] Oklo (greenhouse: oklo)
