@@ -2,37 +2,47 @@
 
 ## Overview
 
-AI-powered energy trading and grid optimization company.
-Founded in 2017 by Matt Wytock (CEO). Headquartered in
-Cupertino, California. Trades across all seven major US
-energy markets with fully automated ML-driven bidding.
+Gridmatic is an AI-enabled power marketer that uses
+deep learning to optimize wholesale energy trading and
+battery storage dispatch. Founded in 2016 by Matt
+Wytock, the company is headquartered in Cupertino, CA.
+Gridmatic trades profitably in all 7 major U.S. energy
+markets with fully automated bidding.
 
 ## Technical Focus
 
-- Machine learning for energy price forecasting
-- Automated real-time power trading and bidding
-- Battery storage optimization (ERCOT and CAISO)
-- Renewable energy risk management and scheduling
-- Grid balancing and clean energy integration
+- Deep neural network energy price forecasting
+- Automated wholesale energy market trading
+- Battery storage dispatch optimization
+- AI Load Optimizer for large energy consumers
+- Retail energy products (Texas, Ohio, Pennsylvania)
 
 ## Scale & Stage
 
-Private. Raised $50M energy storage fund (2023) to manage
-up to 500 MW of battery capacity. Approximately 35-50
-employees. Revenue-generating through energy trading and
-retail electricity operations (Gridmatic Retail).
+Private, raised ~$40M in venture funding plus a $50M
+energy storage fund. Manages 300 MW / 1 GWh of battery
+storage. The top-performing battery in CAISO (2024-2025)
+is operated by Gridmatic, earning 136% more revenue than
+the median battery. Expanding retail energy business
+across three states. Founded 2016.
 
 ## Hiring
 
-Small team with high leverage per engineer. Looking for
-ML engineers, quantitative traders, and energy market
-specialists. Strong Python and data science skills valued.
-Fast-paced trading environment with real financial stakes.
+Gridmatic hires across machine learning, energy
+trading, quantitative research, and software
+engineering. The company values deep expertise in time
+series forecasting, optimization, and power markets.
+Small team with a quantitative, research-driven culture
+where engineers directly impact trading performance
+and revenue.
 
 ## Recent Context
 
-Operating as a power marketer in all major US wholesale
-markets. Closed $50M storage fund for battery management.
-Expanding retail electricity business alongside wholesale
-trading. Focused on using AI to accelerate clean energy
-adoption.
+In August 2025, Gridmatic launched its AI Load Optimizer
+to help large ERCOT energy consumers reduce costs by
+5%+ through AI-driven demand management. In November
+2025, Gridmatic partnered with Satoshi Energy and Cholla
+Inc. to advance flexible load innovation in Texas. The
+company surpassed 1 GWh of storage under management in
+late 2024 and continues expanding both its storage and
+retail businesses.

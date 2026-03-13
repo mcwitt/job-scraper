@@ -173,6 +173,10 @@ US companies to add job board scrapers for.
 
 ## Grid Software / Energy AI
 - [x] Gridmatic (lever: gridmatic)
+- [x] David Energy (ashby: davidenergy)
+- [x] Base Power Company (ashby: base-power)
+- [x] Enode (ashby: enode)
+- [x] Overstory (greenhouse: overstory)
 
 ## Software / Analytics / Data
 - [ ] WattTime — Trakstar Hire, unsupported ATS
@@ -190,6 +194,11 @@ US companies to add job board scrapers for.
 - [x] Paces (gem: paces)
 - [x] Emerald AI (ashby: emerald-ai)
 
+## Energy Storage Developers
+- [x] Aypa Power (greenhouse: aypapower)
+- [x] Clearway Energy (greenhouse: clearwayjobs)
+- [x] Nexamp (greenhouse: nexamp)
+
 ## Solar / Wind / Generation
 - [x] Aclima (ashby: aclima)
 - [x] Verse (greenhouse: verse)
@@ -205,6 +214,9 @@ US companies to add job board scrapers for.
 - [x] Lunar Energy (greenhouse: lunarenergy)
 - [ ] LineVision — Paylocity, unsupported ATS
 - [x] Intersect Power (lever: intersect)
+- [x] Aurora Solar (ashby: aurorasolar)
+- [x] Omnidian (lever: omnidian)
+- [x] Raptor Maps (lever: RaptorMaps)
 
 ## EV / Charging / Transport
 - [x] ChargePoint (greenhouse: chargepoint)
@@ -224,6 +236,12 @@ US companies to add job board scrapers for.
 - [x] Crusoe Energy (ashby: Crusoe)
 - [x] Heron Power (ashby: heron-power)
 - [ ] Engie — SAP SuccessFactors (jobs.engie.com), unsupported ATS
+- [x] VEIR (greenhouse: veir)
+- [x] Sparkfund (greenhouse: sparkfund)
+- [x] Gradient (greenhouse: gradientcomfort)
+- [x] Sealed (ashby: sealed)
+- [ ] BlocPower — Greenhouse board inactive, no active postings
+- [x] Sense (workable: sense)
 
 ## Fusion Energy
 - [x] Helion Energy (ashby: helion)
@@ -235,3 +253,34 @@ US companies to add job board scrapers for.
 
 ## Nuclear
 - [x] Oklo (greenhouse: oklo)
+
+## Climate Tech / Carbon / Weather
+- [x] Persefoni (greenhouse: persefoniaiinc)
+- [x] ClimateAi (greenhouse: climateai)
+- [x] Tomorrow.io (greenhouse: tomorrow)
+- [x] Pachama (lever: pachama)
+- [x] Jupiter Intelligence (lever: jupiterintel)
+- [x] Perennial (lever: perennial)
+
+---
+
+# Data / Analytics Platforms
+
+- [x] Fivetran (greenhouse: fivetran)
+- [x] dbt Labs (greenhouse: dbtlabsinc)
+- [x] Dagster Labs (greenhouse: dagsterlabs)
+- [x] Hex (greenhouse: hextechnologies)
+- [x] Hightouch (greenhouse: hightouch)
+- [x] Prefect (ashby: prefect)
+- [x] Monte Carlo (ashby: montecarlodata)
+- [x] MotherDuck (ashby: MotherDuck)
+
+---
+
+# Strong-Culture Tech
+
+- [x] Stripe (greenhouse: stripe)
+- [x] Retool (gem: retool)
+- [x] Notion (ashby: notion)
+- [x] PostHog (ashby: posthog)
+- [x] Supabase (ashby: supabase)
