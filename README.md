@@ -28,7 +28,7 @@ pip install -e .
 
 ### Configuration
 
-Copy and customize the personal config files:
+Copy and customize the personal config files (see [Configuration files](#configuration-files) for details):
 
 ```bash
 cp keywords.example.txt keywords.txt
