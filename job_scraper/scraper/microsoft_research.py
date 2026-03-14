@@ -73,7 +73,7 @@ async def scrape(http: Http) -> AsyncIterator[Job]:
     total = int(total_m.group(1)) if total_m else 0
     last_page = _max_page(body)
     logger.info(
-        "scraper=microsoft_research listings=%d pages=%d",
+        "listings=%d pages=%d",
         total,
         last_page + 1,
     )
@@ -88,11 +88,11 @@ async def scrape(http: Http) -> AsyncIterator[Job]:
             stubs.extend(_parse_cards(pg_body))
         except Exception:
             logger.warning(
-                "scraper=microsoft_research page=%d error=true", pg
+                "page=%d error=true", pg
             )
 
     logger.info(
-        "scraper=microsoft_research stubs=%d", len(stubs)
+        "stubs=%d", len(stubs)
     )
 
     # Fetch detail pages concurrently for full descriptions
@@ -115,12 +115,12 @@ async def scrape(http: Http) -> AsyncIterator[Job]:
                     dp = data.get("datePosted")
                     return desc, dp[:10] if dp else None
         except Exception:
-            logger.debug("scraper=microsoft_research url=%s error", url)
+            logger.debug("url=%s error=true", url)
         finally:
             done += 1
             if done % 50 == 0:
                 logger.info(
-                    "scraper=microsoft_research details=%d/%d",
+                    "details=%d/%d",
                     done,
                     len(stubs),
                 )
@@ -130,7 +130,7 @@ async def scrape(http: Http) -> AsyncIterator[Job]:
         fetch_detail(url) for _, url, *_ in stubs
     ))
     logger.info(
-        "scraper=microsoft_research details=%d done",
+        "details=%d done",
         len(details),
     )
 

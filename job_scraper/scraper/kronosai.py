@@ -120,7 +120,7 @@ async def scrape(http: Http) -> AsyncIterator[Job]:
     chunk_match = _CHUNK_RE.search(html)
     if not chunk_match:
         logger.warning(
-            "scraper=kronosai msg='could not find careers JS chunk'"
+            "error='could not find careers JS chunk'"
         )
         return
 

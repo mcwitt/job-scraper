@@ -38,9 +38,7 @@ def scrape_board(company: str, instance: str, site: str, *, name: str):
             )
         except Exception:
             logger.warning(
-                "scraper=workday:%s company=%s offset=0"
-                " page_error=true",
-                company,
+                "company=%s offset=0 page_error=true",
                 name,
             )
             return
@@ -48,8 +46,7 @@ def scrape_board(company: str, instance: str, site: str, *, name: str):
         first = json.loads(first_body)
         total = first.get("total", 0)
         logger.info(
-            "scraper=workday:%s company=%s listings=%d",
-            company,
+            "company=%s listings=%d",
             name,
             total,
         )
@@ -76,9 +73,7 @@ def scrape_board(company: str, instance: str, site: str, *, name: str):
                 return json.loads(body).get("jobPostings", [])
             except Exception:
                 logger.warning(
-                    "scraper=workday:%s company=%s offset=%d"
-                    " page_error=true",
-                    company,
+                    "company=%s offset=%d page_error=true",
                     name,
                     offset,
                 )
@@ -116,9 +111,7 @@ def scrape_board(company: str, instance: str, site: str, *, name: str):
                 done += 1
                 if done % 200 == 0:
                     logger.info(
-                        "scraper=workday:%s company=%s"
-                        " details=%d/%d",
-                        company,
+                        "company=%s details=%d/%d",
                         name,
                         done,
                         len(stubs),
@@ -128,8 +121,7 @@ def scrape_board(company: str, instance: str, site: str, *, name: str):
             fetch_detail(ext_path) for _, ext_path, _ in stubs
         ))
         logger.info(
-            "scraper=workday:%s company=%s details=%d done",
-            company,
+            "company=%s details=%d done",
             name,
             len(details),
         )
