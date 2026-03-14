@@ -360,7 +360,7 @@ def run(
     dedup_fields: Annotated[
         str,
         typer.Option(help="Comma-separated Job fields for dedup"),
-    ] = "title,company,team",
+    ] = "title,company,team,description",
     scrape_only: Annotated[
         bool,
         typer.Option("--scrape-only", help="Scrape only, write jobs_raw.jsonl"),
