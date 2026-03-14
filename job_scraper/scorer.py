@@ -3,6 +3,7 @@ import hashlib
 import json
 import logging
 from collections.abc import Callable
+from datetime import date
 from typing import Any
 
 import anthropic
@@ -304,6 +305,10 @@ async def score_fit(
         batch_size,
         cache,
         system_prompt="""\
+The current month is """
+        + date.today().strftime("%B %Y")
+        + """.
+
 You are a diligent tech recruiter screening a candidate against job
 postings. For each role, assess how likely you would advance this
 candidate to a recruiter screen based on their resume.
