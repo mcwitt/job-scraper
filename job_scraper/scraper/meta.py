@@ -145,3 +145,8 @@ async def scrape(http: Http) -> AsyncIterator[Job]:
                 source="meta",
                 scraped_at=scraped_at,
             )
+
+if __name__ == "__main__":
+    from job_scraper.scraper import run
+
+    run(scrape)

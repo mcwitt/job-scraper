@@ -102,3 +102,8 @@ async def scrape(http: Http) -> AsyncIterator[Job]:
         page += 1
         if count >= (total or 0):
             break
+
+if __name__ == "__main__":
+    from job_scraper.scraper import run
+
+    run(scrape)
