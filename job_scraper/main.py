@@ -38,6 +38,8 @@ async def _scrape(
     output_dir: Path,
     scrape_ttl: int,
     max_concurrent: int,
+    only: frozenset[str] | None = None,
+    exclude: frozenset[str] | None = None,
 ) -> tuple[list[Job], dict[str, "SourceStatus"]]:
     """Run scrape phase: discover → scrape → write jobs_raw.jsonl."""
     from job_scraper import status as _status
@@ -47,6 +49,10 @@ async def _scrape(
     semaphore = asyncio.Semaphore(max_concurrent)
 
     scrapers = discover()
+    if only is not None:
+        scrapers = [(n, f, t) for n, f, t in scrapers if n in only]
+    if exclude is not None:
+        scrapers = [(n, f, t) for n, f, t in scrapers if n not in exclude]
     if not scrapers:
         logger.warning("no scrapers found")
         return [], {}
@@ -152,6 +158,8 @@ async def _run(
     scrape_only: bool = False,
     input_jobs: Path | None = None,
     status_report: bool = False,
+    only: frozenset[str] | None = None,
+    exclude: frozenset[str] | None = None,
 ) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -160,7 +168,8 @@ async def _run(
         all_jobs = _load_jobs(input_jobs)
     else:
         all_jobs, statuses = await _scrape(
-            cache_dir, output_dir, scrape_ttl, max_concurrent
+            cache_dir, output_dir, scrape_ttl, max_concurrent,
+            only=only, exclude=exclude,
         )
         if status_report:
             from job_scraper.status_report import render_status_report
@@ -366,12 +375,40 @@ def run(
             "--status-report", help="Generate scraper status HTML report"
         ),
     ] = False,
+    only: Annotated[
+        str | None,
+        typer.Option(
+            help="Comma-separated scraper names to run (default: all)"
+        ),
+    ] = None,
+    exclude: Annotated[
+        str | None,
+        typer.Option(help="Comma-separated scraper names to exclude"),
+    ] = None,
 ) -> None:
     """Scrape and score job postings."""
     if scrape_only and input_jobs is not None:
         raise typer.BadParameter(
             "--scrape-only and --input-jobs are mutually exclusive"
         )
+    if only is not None and exclude is not None:
+        raise typer.BadParameter(
+            "--only and --exclude are mutually exclusive"
+        )
+    only_set: frozenset[str] | None = (
+        frozenset(s.strip() for s in only.split(",")) if only else None
+    )
+    exclude_set: frozenset[str] | None = (
+        frozenset(s.strip() for s in exclude.split(",")) if exclude else None
+    )
+    names_to_check = only_set or exclude_set
+    if names_to_check:
+        valid = {name for name, _, _ in discover()}
+        bad = sorted(names_to_check - valid)
+        if bad:
+            raise typer.BadParameter(
+                f"Unknown scrapers: {', '.join(bad)}"
+            )
     logging.basicConfig(
         format="%(asctime)s %(levelname)s %(message)s",
         datefmt="%H:%M:%S",
@@ -408,6 +445,8 @@ def run(
             scrape_only=scrape_only,
             input_jobs=input_jobs,
             status_report=status_report,
+            only=only_set,
+            exclude=exclude_set,
         )
     )
 

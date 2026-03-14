@@ -112,6 +112,23 @@ US companies to add job board scrapers for.
 - [x] Semgrep (ashby: semgrep)
 - [ ] Snyk — moved to Workday, tenant slug unknown
 - [x] CertiK (lever: certik) — blockchain security / smart contract auditing
+- [x] Vercel (greenhouse: vercel)
+- [x] Linear (ashby: linear)
+- [x] Figma (greenhouse: figma)
+- [x] Elastic (greenhouse: elastic)
+- [x] Twilio (greenhouse: twilio)
+
+## Defense / Data
+- [x] Palantir (lever: palantir)
+- [x] Scale AI (greenhouse: scaleai)
+
+## Enterprise / Platforms
+- [x] Rippling (rippling: rippling)
+- [ ] HashiCorp — acquired by IBM, uses IBM BrassRing ATS
+- [ ] Palo Alto Networks — TalentBrew/Radancy ATS, unsupported
+
+## Cybersecurity
+- [x] CrowdStrike (workday: crowdstrike/wd5)
 
 ## Research Orgs
 - [x] AI2 (greenhouse: thealleninstitute)
@@ -130,6 +147,11 @@ US companies to add job board scrapers for.
 - [x] Lyft (greenhouse: lyft)
 - [x] Pinterest (greenhouse: pinterestjobadvertisements)
 - [x] Roblox (greenhouse: roblox)
+- [x] Discord (greenhouse: discord)
+- [x] Reddit (greenhouse: reddit)
+- [x] Instacart (greenhouse: instacart)
+- [x] DoorDash (greenhouse: doordashusa)
+- [ ] Netflix — Eightfold AI (explore.jobs.netflix.net), unsupported ATS
 
 ## Fintech / Other Tech
 - [x] Causal (ashby: causal)
@@ -140,6 +162,11 @@ US companies to add job board scrapers for.
 - [x] PromptQL / Hasura (gem: promptql)
 - [x] Reasonable AI (workable: reasonable) — reasoning systems / research copilot
 - [x] CircuitHub (ashby: circuithub) — on-demand electronics manufacturing (Haskell stack)
+- [x] Block (greenhouse: block) — Square, Cash App, Bitcoin
+- [x] Coinbase (greenhouse: coinbase)
+- [x] Brex (greenhouse: brex)
+- [x] Plaid (ashby: plaid)
+- [x] Salesforce (workday: salesforce/wd12)
 - [ ] Stellon Labs — Notion-based job listings, no supported ATS
 - [ ] Kaon Interactive — custom careers page (kaon.com/careers), no supported ATS
 - [ ] Holland & Hart — Florecruit + UltiPro ATS, neither supported
