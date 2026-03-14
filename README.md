@@ -64,6 +64,12 @@ python -m job_scraper.main --model claude-haiku-4-5-20251001 --batch-size 20
 
 # Keep only the top 50 jobs by relevance (default: 100)
 python -m job_scraper.main --top-k 50
+
+# Run only specific scrapers (comma-separated module names)
+python -m job_scraper.main --scrape-only --only discord,figma,linear
+
+# Run all scrapers except specific ones
+python -m job_scraper.main --exclude salesforce,crowdstrike
 ```
 
 Output goes to `data/output/` by default:

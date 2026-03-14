@@ -29,3 +29,13 @@ async def scrape(get: GetFn) -> AsyncIterator[Job]:
 ```
 
 No other changes needed — the scraper is auto-discovered on next run.
+
+## Testing a new scraper
+
+After creating a scraper, test it in isolation:
+
+```bash
+python -m job_scraper.main --scrape-only --only <module_name>
+```
+
+The module name is the filename without `.py` (e.g. `coinbase` for `coinbase.py`).

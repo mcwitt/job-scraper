@@ -54,6 +54,12 @@ For custom scrapers, implement `async def scrape(http: Http) -> AsyncIterator[Jo
 
 To identify a company's ATS platform, follow the "Careers" or "Jobs" link from their website — the job listing URLs reveal the platform (e.g. `boards.greenhouse.io/SLUG`, `jobs.ashbyhq.com/SLUG`, `jobs.lever.co/SLUG`, `ats.rippling.com/SLUG`, `apply.workable.com/SLUG`). Verify the slug works by hitting the platform's API before creating a scraper.
 
+After creating a scraper, test it with `--scrape-only --only <module_name>`:
+
+```bash
+python -m job_scraper.main --scrape-only --only mycompany
+```
+
 When adding a scraper for a new company, also add a company context file at `job_scraper/companies/<canonical-name>.md` (where canonical name is lowercase, non-alphanumeric replaced with hyphens). Company context files should include these sections:
 
 - **Overview** — What the company does, when founded, founder(s), HQ location
