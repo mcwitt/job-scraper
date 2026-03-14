@@ -274,6 +274,8 @@ Score 0.0-1.0:
 - 0.0-0.39: Not interesting — poor alignment with what they want
 
 Write "why" as a brief justification before assigning the score.
+Each justification must stand alone — do not reference other roles
+in the batch by number, name, or comparison.
 
 ## Candidate Preferences
 
@@ -344,6 +346,8 @@ Score 0.0-1.0:
   experience
 
 Write "why" as a brief justification before assigning the score.
+Each justification must stand alone — do not reference other roles
+in the batch by number, name, or comparison.
 
 ## Candidate Resume
 
