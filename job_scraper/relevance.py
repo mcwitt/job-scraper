@@ -42,14 +42,14 @@ def score_relevance(
     try:
         conn.execute(
             "CREATE VIRTUAL TABLE docs USING fts5"
-            "(title, description, location)"
+            "(title, description, company, location)"
         )
         conn.executemany(
             "INSERT INTO docs(rowid, title, description,"
-            " location) VALUES (?, ?, ?, ?)",
+            " company, location) VALUES (?, ?, ?, ?, ?)",
             (
                 (i, job.title, job.description,
-                 job.location or "")
+                 job.company, job.location or "")
                 for i, job in enumerate(jobs)
             ),
         )
@@ -57,11 +57,12 @@ def score_relevance(
         scores = [0.0] * len(jobs)
         for query in queries:
             # bm25 weights: title=5x, description=1x,
-            # location=3x
+            # company=0x, location=3x
             try:
                 rows = conn.execute(
                     "SELECT rowid, bm25(docs, 5.0, 1.0,"
-                    " 3.0) FROM docs WHERE docs MATCH ?",
+                    " 0.0, 3.0) FROM docs WHERE docs"
+                    " MATCH ?",
                     (query,),
                 ).fetchall()
             except sqlite3.OperationalError as e:
