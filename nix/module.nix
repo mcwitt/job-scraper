@@ -150,7 +150,7 @@ in
       };
       dedupFields = mkOption {
         type = types.str;
-        default = "title,company,team";
+        default = "title,company,team,description";
         description = "Comma-separated Job fields for deduplication.";
       };
     };
