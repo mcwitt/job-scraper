@@ -148,6 +148,7 @@ async def _run(
     model: str,
     preferences_path: Path,
     max_concurrent: int,
+    max_concurrent_api: int,
     skip_score: bool,
     report: bool,
     keywords_path: Path,
@@ -265,6 +266,7 @@ async def _run(
             batch_size,
             interest_cache,
             companies=companies,
+            max_concurrent=max_concurrent_api,
         )
 
     resume_text = resume_path.read_text()
@@ -278,6 +280,7 @@ async def _run(
             batch_size,
             fit_cache,
             companies=companies,
+            max_concurrent=max_concurrent_api,
         )
 
     # Merge into ScoredJob objects
@@ -338,6 +341,10 @@ def run(
     max_concurrent: Annotated[
         int, typer.Option(help="Max concurrent HTTP requests")
     ] = 20,
+    max_concurrent_api: Annotated[
+        int,
+        typer.Option(help="Max concurrent Claude API requests"),
+    ] = 10,
     skip_score: Annotated[
         bool, typer.Option("--skip-score", help="Skip scoring step")
     ] = False,
@@ -435,6 +442,7 @@ def run(
             model=model,
             preferences_path=preferences,
             max_concurrent=max_concurrent,
+            max_concurrent_api=max_concurrent_api,
             skip_score=skip_score,
             report=report,
             keywords_path=keywords,

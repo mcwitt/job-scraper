@@ -64,6 +64,7 @@ let
                 "--batch-size ${toString s.batchSize}"
                 "--top-k ${toString s.topK}"
                 "--dedup-fields ${s.dedupFields}"
+                "--max-concurrent-api ${toString s.maxConcurrentApi}"
               ]
               ++ lib.optional (
                 ucfg.linkedinConnectionsDir != null
@@ -131,6 +132,11 @@ in
         type = types.int;
         default = 20;
         description = "Max concurrent HTTP requests.";
+      };
+      maxConcurrentApi = mkOption {
+        type = types.int;
+        default = 10;
+        description = "Max concurrent Claude API requests.";
       };
       scrapeTtl = mkOption {
         type = types.int;
