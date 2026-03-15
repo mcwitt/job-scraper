@@ -109,6 +109,9 @@ US companies to add job board scrapers for.
 - [x] Osmo (ashby: osmo) — AI for digitizing scent/smell
 - [ ] Citrine Informatics — Lever board deactivated, ATS unknown
 
+## Space / Earth Observation
+- [x] Muon Space (greenhouse: muonspace) — satellite constellations for climate monitoring
+
 ## Autonomy / Robotics
 - [x] Foundation (rippling: foundation-robotics) — humanoid robotics
 - [x] Waymo (greenhouse: waymo)
@@ -205,7 +208,7 @@ US companies to add job board scrapers for.
 - [x] Sila Nanotechnologies (greenhouse: silananotechnologies)
 - [ ] Primus Power — unknown ATS, very small company
 - [x] Malta Inc (workable: malta-inc)
-- [ ] Antora Energy (greenhouse: antora — board says "no longer active")
+- [x] Antora Energy (greenhouse: antora) — thermal energy storage
 - [x] Noon Energy (greenhouse: noonenergy)
 - [x] Energy Vault (lever: EnergyVault)
 - [x] Group14 Technologies (greenhouse: group14)
@@ -282,6 +285,7 @@ US companies to add job board scrapers for.
 - [ ] Nuvve — unknown ATS
 - [ ] Electrify America — VW Group custom ATS
 - [x] Samsara (greenhouse: samsara)
+- [x] Parallel Systems (greenhouse: parallel) — autonomous battery-electric rail freight
 
 ## Hydrogen / Other
 - [x] Bloom Energy (workday: bloomenergy/wd1)
@@ -321,6 +325,12 @@ US companies to add job board scrapers for.
 - [x] Pachama (lever: pachama)
 - [x] Jupiter Intelligence (lever: jupiterintel)
 - [x] Perennial (lever: perennial)
+- [x] Twelve (ashby: twelve) — CO2-to-fuels/chemicals via electrochemistry
+- [x] Pano AI (ashby: pano-ai) — early wildfire detection with AI + cameras
+- [x] Sublime Systems (lever: SublimeSystems) — low-carbon cement via electrochemistry
+- [x] Mill (greenhouse: mill) — food waste recycling / kitchen food recycler
+- [x] AMP Robotics (greenhouse: ampsortation) — AI-powered recycling/waste sorting
+- [ ] AiDash — Lever API disabled, self-hosted careers page
 
 ---
 
