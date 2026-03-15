@@ -13,7 +13,8 @@ US companies to add job board scrapers for.
 - [x] SSI (ashby: ssi)
 - [x] Character AI (ashby: character)
 - [ ] Meta FAIR — custom ATS (metacareers.com), needs custom scraper
-- [ ] Apple MLR — custom ATS (jobs.apple.com), needs custom scraper
+- [ ] Apple — custom ATS (jobs.apple.com), needs custom scraper
+- [x] Reflection AI (ashby: reflectionai)
 - [ ] Adept AI — custom careers page, largely acquired by Amazon (2024)
 - [x] Inflection AI (greenhouse: inflectionai)
 - [x] Poolside (ashby: poolside)
@@ -25,6 +26,7 @@ US companies to add job board scrapers for.
 - [x] Genesis AI (ashby: genesis-ai) — physical AI / robotics world models
 - [x] Hippocratic AI (ashby: Hippocratic AI) — healthcare LLM agents
 - [x] Odyssey (ashby: odysseyml) — general-purpose world models
+- [ ] Sakana AI — Google Forms + email (careers@sakana.ai), no supported ATS
 
 ## Hardware / Inference / Compute
 - [x] NVIDIA (workday: nvidia/wd5)
@@ -46,8 +48,13 @@ US companies to add job board scrapers for.
 - [x] TensorWave (ashby: tensorwave)
 - [x] Positron AI (rippling: positron)
 - [x] MatX (greenhouse: matx) — LLM-optimized AI chips
+- [x] Atomic Semi (ashby: AtomicSemi) — custom semiconductor fab
+- [ ] Sagence AI — no public ATS, hires via LinkedIn/direct outreach
+- [ ] Oxide Computer — custom ATS (oxide.computer/careers), needs custom scraper
 
 ## ML Infra / Platforms
+- [x] Snorkel AI (greenhouse: snorkelai)
+- [x] Deepgram (ashby: Deepgram) — Voice AI platform
 - [x] Anyscale (lever: anyscale)
 - [x] Baseten (ashby: baseten)
 - [x] Databricks (greenhouse: databricks)
@@ -62,9 +69,14 @@ US companies to add job board scrapers for.
 - [ ] Lepton AI — acquired by NVIDIA (2025), no independent careers page
 - [x] BentoML (ashby: bentoml)
 - [ ] Lamini AI — Lever board deactivated, site unreachable
+- [ ] Fluency — JazzHR (applytojob.com), unsupported ATS
 - [x] Granica (ashby: granica) — AI data readiness / optimization platform
 
+## AI Safety / Evaluation
+- [x] Patronus AI (rippling: patronus-ai-jobs)
+
 ## AI for Science / Biotech
+- [x] Genentech (workday: roche/wd3/ROG-A2O-GENE)
 - [x] Atomic AI (greenhouse: atomai)
 - [x] Chai Discovery (ashby: chaidiscovery)
 - [x] Cradle (ashby: cradlebio)
@@ -93,9 +105,12 @@ US companies to add job board scrapers for.
 - [x] Inceptive (greenhouse: inceptive)
 - [x] Latent Labs (ashby: latentlabs)
 - [x] GenBio AI (lever: genbio)
+- [x] Eikon Therapeutics (greenhouse: eikontherapeutics) — super-resolution microscopy drug discovery
+- [x] Osmo (ashby: osmo) — AI for digitizing scent/smell
 - [ ] Citrine Informatics — Lever board deactivated, ATS unknown
 
 ## Autonomy / Robotics
+- [x] Foundation (rippling: foundation-robotics) — humanoid robotics
 - [x] Waymo (greenhouse: waymo)
 - [x] Toyota Research Institute (lever: tri)
 - [x] Anduril (greenhouse: andurilindustries)
@@ -105,9 +120,13 @@ US companies to add job board scrapers for.
 - [x] Zoox (lever: zoox)
 - [x] Zipline (greenhouse: flyzipline)
 - [x] Rivian (icims: careers.rivian.com)
+- [ ] Revolve AI — no supported ATS, hires via LinkedIn
 - [ ] Tesla — custom ATS (tesla.com/careers), needs custom scraper
+- [x] Waabi (lever: waabi) — autonomous driving (trucks + robotaxis)
+- [ ] Covariant — Lever board deactivated after Amazon acquihire (Aug 2024)
 
 ## Developer Tools / Security
+- [x] Greptile (ashby: greptile) — AI code review
 - [x] Cloudflare (greenhouse: cloudflare)
 - [x] Semgrep (ashby: semgrep)
 - [ ] Snyk — moved to Workday, tenant slug unknown
@@ -141,6 +160,7 @@ US companies to add job board scrapers for.
 - [ ] Unison Computing — email-only (jobs@unison.cloud), not currently hiring
 
 ## Tech / Consumer
+- [x] Perplexity (ashby: perplexity) — AI search engine
 - [ ] Amazon — custom ATS (amazon.jobs), needs custom scraper
 - [x] Google (custom: careers.google.com)
 - [ ] Uber — custom ATS, needs custom scraper
@@ -191,6 +211,7 @@ US companies to add job board scrapers for.
 - [x] Group14 Technologies (greenhouse: group14)
 - [x] Plus Power (greenhouse: pluspower)
 - [x] FlexGen (rippling: external-job-board)
+- [x] Peak Energy (greenhouse: peakenergy) — sodium-ion batteries for grid storage
 
 ## Grid / Demand Response / VPPs
 - [x] Voltus (lever: voltus)
@@ -288,6 +309,7 @@ US companies to add job board scrapers for.
 - [ ] TAE Technologies (ashby: taetechnologies) — needs verification
 - [ ] General Fusion — ADP Workforce Now, unsupported ATS
 - [ ] Type One Energy — unknown ATS
+- [ ] Realta Fusion — PrismHR-Hire, unsupported ATS
 
 ## Nuclear
 - [x] Oklo (greenhouse: oklo)
