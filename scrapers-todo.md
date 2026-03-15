@@ -67,7 +67,7 @@ US companies to add job board scrapers for.
 - [x] Hugging Face (workable: huggingface)
 - [x] Snowflake (phenom: careers.snowflake.com)
 - [ ] Lepton AI — acquired by NVIDIA (2025), no independent careers page
-- [x] BentoML (ashby: bentoml)
+- [ ] BentoML — Ashby board deactivated, API returns 404
 - [ ] Lamini AI — Lever board deactivated, site unreachable
 - [ ] Fluency — JazzHR (applytojob.com), unsupported ATS
 - [x] Granica (ashby: granica) — AI data readiness / optimization platform
@@ -164,7 +164,7 @@ US companies to add job board scrapers for.
 
 ## Tech / Consumer
 - [x] Perplexity (ashby: perplexity) — AI search engine
-- [ ] Amazon — custom ATS (amazon.jobs), needs custom scraper
+- [x] Amazon (custom: amazon.jobs)
 - [x] Google (custom: careers.google.com)
 - [ ] Uber — custom ATS, needs custom scraper
 - [x] Lyft (greenhouse: lyft)
