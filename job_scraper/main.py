@@ -144,7 +144,6 @@ async def _run(
     cache_dir: Path,
     output_dir: Path,
     scrape_ttl: int,
-    batch_size: int,
     model: str,
     preferences_path: Path,
     max_concurrent: int,
@@ -245,7 +244,7 @@ async def _run(
     import anthropic
 
     from job_scraper.companies import load_companies
-    from job_scraper.models import Score, ScoredJob, scored_job
+    from job_scraper.models import Fit, Interest, ScoredJob
     from job_scraper.scorer import (
         score_fit,
         score_interest,
@@ -256,52 +255,52 @@ async def _run(
     fit_cache_path = cache_dir / "score_fit.jsonl"
     ai = anthropic.AsyncAnthropic()
 
-    async with open_cache(score_cache_path) as interest_cache:
-        logger.info("scoring phase=interest")
-        interest_scores = await score_interest(
-            unique_jobs,
-            preferences_text,
-            ai,
-            model,
-            batch_size,
-            interest_cache,
-            companies=companies,
-            max_concurrent=max_concurrent_api,
-        )
-
     resume_text = resume_path.read_text()
-    async with open_cache(fit_cache_path) as fit_cache:
-        logger.info("scoring phase=fit")
-        fit_scores = await score_fit(
-            unique_jobs,
-            resume_text,
-            ai,
-            model,
-            batch_size,
-            fit_cache,
-            companies=companies,
-            max_concurrent=max_concurrent_api,
+
+    async with (
+        open_cache(score_cache_path) as interest_cache,
+        open_cache(fit_cache_path) as fit_cache,
+    ):
+        logger.info("scoring phase=interest+fit")
+        interest_scores, fit_scores = await asyncio.gather(
+            score_interest(
+                unique_jobs,
+                preferences_text,
+                ai,
+                model,
+                interest_cache,
+                companies=companies,
+                max_concurrent=max_concurrent_api,
+            ),
+            score_fit(
+                unique_jobs,
+                resume_text,
+                ai,
+                model,
+                fit_cache,
+                companies=companies,
+                max_concurrent=max_concurrent_api,
+            ),
         )
 
     # Merge into ScoredJob objects
     scored = []
     for job in unique_jobs:
-        interest = interest_scores.get(job.hash)
-        if interest is None:
+        interest_data = interest_scores.get(job.hash)
+        fit_data = fit_scores.get(job.hash)
+        if interest_data is None or fit_data is None:
             continue
-        fit = fit_scores.get(job.hash)
         scored.append(
-            scored_job(
-                job,
-                score_interest=Score(*interest),
-                score_fit=Score(*fit) if fit else None,
+            ScoredJob(
+                **to_dict(job),
+                score_interest=Interest(**interest_data),
+                score_fit=Fit(**fit_data),
             )
         )
 
     # Sort by priority (candidate * recruiter) descending
     def _priority(j: ScoredJob) -> float:
-        fv = j.score_fit.value if j.score_fit else j.score_interest.value
-        return j.score_interest.value * fv
+        return j.score_interest.score * j.score_fit.score
 
     scored.sort(key=_priority, reverse=True)
 
@@ -331,7 +330,6 @@ def run(
     scrape_ttl: Annotated[
         int, typer.Option(help="Scrape cache TTL in seconds")
     ] = 86400,
-    batch_size: Annotated[int, typer.Option(help="Scoring batch size")] = 20,
     model: Annotated[
         str, typer.Option(help="Claude model for scoring")
     ] = "claude-haiku-4-5-20251001",
@@ -438,7 +436,6 @@ def run(
             cache_dir=cache_dir,
             output_dir=output_dir,
             scrape_ttl=scrape_ttl,
-            batch_size=batch_size,
             model=model,
             preferences_path=preferences,
             max_concurrent=max_concurrent,

@@ -19,10 +19,10 @@ python -m job_scraper.main
 Key files:
 - `job_scraper/main.py` — CLI (Typer) and pipeline orchestration
 - `job_scraper/relevance.py` — FTS5 relevance scoring against keywords
-- `job_scraper/scorer.py` — Claude scoring with extended thinking and structured output
+- `job_scraper/scorer.py` — Claude scoring with prompt caching and structured output
 - `job_scraper/companies/` — company context package (bundled `.md` files + `canonicalize`/`load_companies`)
 - `job_scraper/cache.py` — JSONL append-log cache with TTL
-- `job_scraper/models.py` — Job/ScoredJob frozen dataclasses
+- `job_scraper/models.py` — Job/ScoredJob/Interest/Fit frozen dataclasses
 - `job_scraper/report.py` — HTML report (Jinja2)
 - `job_scraper/scraper/__init__.py` — `ScrapeFn` type, `discover()` auto-discovery
 - `job_scraper/scraper/_http.py` — cached HTTP GET/POST with rate-limiting
