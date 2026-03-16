@@ -17,9 +17,29 @@ class Job:
 
 
 @dataclass(frozen=True)
-class Score:
-    value: float
-    why: str
+class Interest:
+    strengths_alignment: str
+    growth_opportunities: str
+    role_type_fit: str
+    company_reputation: str
+    compensation: str
+    location: str
+    dealbreakers: str
+    summary: str
+    score: float
+
+
+@dataclass(frozen=True)
+class Fit:
+    demonstrated_experience: str
+    institutional_credibility: str
+    depth_vs_adjacency: str
+    career_trajectory: str
+    minimum_qualifications: str
+    seniority_alignment: str
+    location_visa: str
+    summary: str
+    score: float
 
 
 @dataclass(frozen=True)
@@ -31,24 +51,12 @@ class ScoredJob:
     description: str
     source: str
     scraped_at: str
-    score_interest: Score
+    score_interest: Interest
+    score_fit: Fit
     team: str | None = None
     posted: str | None = None
     comp: str | None = None
     location: str | None = None
-    score_fit: Score | None = None
 
 
 to_dict = asdict
-
-
-def scored_job(
-    job: Job,
-    score_interest: Score,
-    score_fit: Score | None = None,
-) -> ScoredJob:
-    return ScoredJob(
-        **to_dict(job),
-        score_interest=score_interest,
-        score_fit=score_fit,
-    )

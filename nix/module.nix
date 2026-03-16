@@ -61,7 +61,6 @@ let
                 "--cache-dir ${userDir}/cache"
                 "--output-dir ${userDir}/output"
                 "--model ${s.model}"
-                "--batch-size ${toString s.batchSize}"
                 "--top-k ${toString s.topK}"
                 "--dedup-fields ${s.dedupFields}"
                 "--max-concurrent-api ${toString s.maxConcurrentApi}"
@@ -122,11 +121,6 @@ in
         type = types.str;
         default = "claude-haiku-4-5-20251001";
         description = "Claude model for scoring.";
-      };
-      batchSize = mkOption {
-        type = types.int;
-        default = 20;
-        description = "Scoring batch size.";
       };
       maxConcurrent = mkOption {
         type = types.int;
