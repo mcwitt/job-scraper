@@ -45,6 +45,7 @@ TEMPLATE = """\
     text-align: left; }
   .tip:hover .tip-body,
   .tip.active .tip-body { display: block; }
+  .tip.flip .tip-body { top: auto; bottom: 100%; }
   .tip-score .tip-body { min-width: 320px; }
   .tip-company .tip-body { max-width: 520px;
     max-height: 400px; overflow-y: auto; }
@@ -228,8 +229,20 @@ document.querySelectorAll('.cell')
       this.classList.toggle('expanded');
     });
   });
+function positionTip(el) {
+  el.classList.remove('flip');
+  var body = el.querySelector('.tip-body');
+  if (!body) return;
+  var rect = body.getBoundingClientRect();
+  if (rect.bottom > window.innerHeight) {
+    el.classList.add('flip');
+  }
+}
 document.querySelectorAll('.tip')
   .forEach(function(el) {
+    el.addEventListener('mouseenter', function() {
+      positionTip(el);
+    });
     el.addEventListener('click', function(e) {
       document.querySelectorAll('.tip.active')
         .forEach(function(t) {
@@ -237,6 +250,7 @@ document.querySelectorAll('.tip')
             t.classList.remove('active');
         });
       this.classList.toggle('active');
+      if (el.classList.contains('active')) positionTip(el);
       e.stopPropagation();
     });
   });
