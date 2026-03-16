@@ -113,6 +113,7 @@ async def score_jobs(
     system_prompt: str,
     companies: dict[str, str],
     output_schema: dict[str, Any],
+    label: str = "score",
     max_concurrent: int = 10,
 ) -> dict[str, dict[str, Any]]:
     """Score jobs one-per-request, using cache to skip already-scored.
@@ -139,11 +140,12 @@ async def score_jobs(
             to_score.append(job)
 
     if not to_score:
-        logger.info("all cached count=%d", len(results))
+        logger.info("%s all cached count=%d", label, len(results))
         return results
 
     logger.info(
-        "scoring jobs=%d cached=%d",
+        "%s jobs=%d cached=%d",
+        label,
         len(to_score),
         len(results),
     )
@@ -251,6 +253,7 @@ past experience but not stated interests should score lower.
         + preferences,
         companies=companies or {},
         output_schema=_INTEREST_SCHEMA,
+        label="interest",
         max_concurrent=max_concurrent,
     )
 
@@ -322,5 +325,6 @@ experience should not significantly boost the score.
         + resume,
         companies=companies or {},
         output_schema=_FIT_SCHEMA,
+        label="fit",
         max_concurrent=max_concurrent,
     )

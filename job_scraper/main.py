@@ -261,7 +261,6 @@ async def _run(
         open_cache(score_cache_path) as interest_cache,
         open_cache(fit_cache_path) as fit_cache,
     ):
-        logger.info("scoring phase=interest+fit")
         interest_scores, fit_scores = await asyncio.gather(
             score_interest(
                 unique_jobs,
@@ -414,11 +413,7 @@ def run(
             raise typer.BadParameter(
                 f"Unknown scrapers: {', '.join(bad)}"
             )
-    logging.basicConfig(
-        format="%(asctime)s %(levelname)s %(message)s",
-        datefmt="%H:%M:%S",
-        level=logging.INFO,
-    )
+    logging.basicConfig(level=logging.INFO)
     if dedup_fields:
         fields: tuple[str, ...] = tuple(
             f.strip() for f in dedup_fields.split(",")
