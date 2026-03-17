@@ -233,8 +233,14 @@ function positionTip(el) {
   el.classList.remove('flip');
   var body = el.querySelector('.tip-body');
   if (!body) return;
+  body.style.display = 'block';
+  void body.offsetHeight;
   var rect = body.getBoundingClientRect();
-  if (rect.bottom > window.innerHeight) {
+  body.style.display = '';
+  var vh = window.visualViewport
+    ? window.visualViewport.height
+    : window.innerHeight;
+  if (rect.bottom > vh) {
     el.classList.add('flip');
   }
 }
