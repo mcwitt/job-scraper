@@ -22,11 +22,12 @@ def _format_salary(salary: dict) -> str | None:
     return " - ".join(parts) + (f" / {interval}" if interval else "")
 
 
-def scrape_board(company: str, *, name: str):
+def scrape_board(company: str, *, name: str, eu: bool = False):
     """Return a scrape function for a Lever job board."""
 
     async def scrape(http: Http) -> AsyncIterator[Job]:
-        url = f"https://api.lever.co/v0/postings/{company}?mode=json"
+        host = "api.eu.lever.co" if eu else "api.lever.co"
+        url = f"https://{host}/v0/postings/{company}?mode=json"
         body, scraped_at = await http.get(url)
         postings = json.loads(body)
         for posting in postings:

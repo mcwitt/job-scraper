@@ -49,6 +49,8 @@ US companies to add job board scrapers for.
 - [x] Positron AI (rippling: positron)
 - [x] MatX (greenhouse: matx) — LLM-optimized AI chips
 - [x] Atomic Semi (ashby: AtomicSemi) — custom semiconductor fab
+- [x] EnCharge AI (greenhouse: enchargeai36) — analog in-memory computing AI chips
+- [x] AMD (icims: careers.amd.com) — GPUs, CPUs, AI accelerators
 - [ ] Sagence AI — no public ATS, hires via LinkedIn/direct outreach
 - [ ] Oxide Computer — custom ATS (oxide.computer/careers), needs custom scraper
 
@@ -74,6 +76,8 @@ US companies to add job board scrapers for.
 
 ## AI Safety / Evaluation
 - [x] Patronus AI (rippling: patronus-ai-jobs)
+- [x] FAR AI (ashby: far.ai)
+- [ ] Redwood Research — Airtable form, no supported ATS
 
 ## AI for Science / Biotech
 - [x] Genentech (workday: roche/wd3/ROG-A2O-GENE)
@@ -108,6 +112,8 @@ US companies to add job board scrapers for.
 - [x] Eikon Therapeutics (greenhouse: eikontherapeutics) — super-resolution microscopy drug discovery
 - [x] Osmo (ashby: osmo) — AI for digitizing scent/smell
 - [ ] Citrine Informatics — Lever board deactivated, ATS unknown
+- [x] InstaDeep (lever-eu: instadeep) — AI for drug discovery, acquired by BioNTech
+- [ ] Diffuse Bio — Dover (app.dover.com), unsupported ATS
 
 ## Space / Earth Observation
 - [x] Muon Space (greenhouse: muonspace) — satellite constellations for climate monitoring
@@ -154,6 +160,8 @@ US companies to add job board scrapers for.
 
 ## Research Orgs
 - [x] AI2 (greenhouse: thealleninstitute)
+- [x] Basis Research Institute (ashby: basis-research)
+- [x] Lawrence Livermore National Lab (smartrecruiters: LLNL)
 
 ## Open-Source Consulting
 - [x] Quansight (greenhouse: quansight)
@@ -179,6 +187,8 @@ US companies to add job board scrapers for.
 ## Fintech / Other Tech
 - [x] Causal (ashby: causal)
 - [x] Galois (workable: galois)
+- [x] IOG / Input Output Global (workable: io-global) — Cardano blockchain, Haskell
+- [x] Imandra (workable: imandra) — formal verification / automated reasoning, OCaml
 - [x] Jane Street (greenhouse: janestreet)
 - [x] Mercury (greenhouse: mercury)
 - [x] Bitnomial (ashby: bitnomial)
@@ -193,6 +203,9 @@ US companies to add job board scrapers for.
 - [ ] Stellon Labs — Notion-based job listings, no supported ATS
 - [ ] Kaon Interactive — custom careers page (kaon.com/careers), no supported ATS
 - [ ] Holland & Hart — Florecruit + UltiPro ATS, neither supported
+- [ ] Majestic Labs — Comeet ATS, unsupported
+- [ ] Theorem — Airtable form, no supported ATS
+- [ ] RadixArk — custom Framer site, no supported ATS
 
 ---
 
@@ -331,6 +344,7 @@ US companies to add job board scrapers for.
 - [x] Mill (greenhouse: mill) — food waste recycling / kitchen food recycler
 - [x] AMP Robotics (greenhouse: ampsortation) — AI-powered recycling/waste sorting
 - [ ] AiDash — Lever API disabled, self-hosted careers page
+- [ ] Silurian — YC Work at a Startup only, no supported ATS
 
 ---
 
