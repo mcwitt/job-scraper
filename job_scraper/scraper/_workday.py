@@ -51,12 +51,17 @@ def scrape_board(company: str, instance: str, site: str, *, name: str):
             total,
         )
 
-        for posting in first.get("jobPostings", []):
-            stubs.append((
+        def to_stub(
+            posting: dict,
+        ) -> tuple[str, str, str | None]:
+            return (
                 posting.get("title", ""),
                 posting.get("externalPath", ""),
                 posting.get("locationsText"),
-            ))
+            )
+
+        for posting in first.get("jobPostings", []):
+            stubs.append(to_stub(posting))
 
         # Fetch remaining pages concurrently
         async def fetch_page(offset: int) -> list[dict]:
@@ -85,16 +90,14 @@ def scrape_board(company: str, instance: str, site: str, *, name: str):
         ))
         for page in remaining:
             for posting in page:
-                stubs.append((
-                    posting.get("title", ""),
-                    posting.get("externalPath", ""),
-                    posting.get("locationsText"),
-                ))
+                stubs.append(to_stub(posting))
 
         # Phase 2: fetch detail pages concurrently (cached)
         done = 0
 
-        async def fetch_detail(ext_path: str) -> tuple[str, str | None]:
+        async def fetch_detail(
+            ext_path: str,
+        ) -> tuple[str, str | None, str | None]:
             nonlocal done
             url = f"{base}/wday/cxs/{company}/{site}{ext_path}"
             try:
@@ -104,9 +107,24 @@ def scrape_board(company: str, instance: str, site: str, *, name: str):
                 desc = html_to_text(desc_html) if desc_html else ""
                 start = info.get("startDate")
                 posted = start[:10] if start else None
-                return desc, posted
+                # Build location from detail fields (more precise
+                # than the listing's locationsText which may say
+                # "2 Locations" etc.)
+                locs: list[str] = []
+                if primary := info.get("location"):
+                    locs.append(primary)
+                for extra in info.get("additionalLocations", []):
+                    if extra and extra not in locs:
+                        locs.append(extra)
+                location = "; ".join(locs) if locs else None
+                return desc, posted, location
             except Exception:
-                return "", None
+                logger.warning(
+                    "company=%s detail_error=true path=%s",
+                    name,
+                    ext_path,
+                )
+                return "", None, None
             finally:
                 done += 1
                 if done % 200 == 0:
@@ -126,9 +144,11 @@ def scrape_board(company: str, instance: str, site: str, *, name: str):
             len(details),
         )
 
-        for (title, ext_path, location), (description, posted) in zip(
-            stubs, details, strict=True
-        ):
+        for (title, ext_path, listing_loc), (
+            description,
+            posted,
+            detail_loc,
+        ) in zip(stubs, details, strict=True):
             post_url = f"{base}/{site}{ext_path}"
             h = job_hash(title, name, description)
             yield Job(
@@ -139,7 +159,7 @@ def scrape_board(company: str, instance: str, site: str, *, name: str):
                 url=post_url,
                 posted=posted,
                 comp=None,
-                location=location,
+                location=detail_loc or listing_loc,
                 description=description,
                 source=f"workday:{company}",
                 scraped_at=scraped_at,
