@@ -191,12 +191,16 @@ async def _run(
     queries = parse_query(keywords_path.read_text())
     scored_rel = score_relevance(queries, all_jobs)
 
-    # Write all jobs with relevance (observability)
+    # Write all jobs with relevance + per-group breakdown
     rel_path = output_dir / "jobs_relevance.jsonl"
     with rel_path.open("w") as f:
-        for job, rel in scored_rel:
+        for job, rel, groups in scored_rel:
             d = to_dict(job)
             d["relevance"] = round(rel, 4)
+            d["relevance_groups"] = {
+                str(k): round(v, 4)
+                for k, v in sorted(groups.items())
+            }
             f.write(json.dumps(d) + "\n")
     logger.info(
         "wrote relevance scores count=%d path=%s",
@@ -204,18 +208,45 @@ async def _run(
         rel_path,
     )
 
-    logger.info("relevance total=%d top_k=%d", len(all_jobs), top_k)
+    # Relevance distribution summary
+    all_scores = [rel for _, rel, _ in scored_rel]
+    if all_scores:
+        all_scores_sorted = sorted(all_scores)
+        n = len(all_scores_sorted)
+
+        def _percentile(k: int) -> float:
+            idx = min(int(n * k / 100), n - 1)
+            return all_scores_sorted[idx]
+
+        nonzero = sum(
+            1 for s in all_scores_sorted if s > 0
+        )
+        logger.info(
+            "relevance total=%d nonzero=%d top_k=%d"
+            " p50=%.4f p75=%.4f p90=%.4f p95=%.4f"
+            " max=%.4f",
+            n,
+            nonzero,
+            top_k,
+            _percentile(50),
+            _percentile(75),
+            _percentile(90),
+            _percentile(95),
+            all_scores_sorted[-1],
+        )
 
     # Deduplicate by selected fields (before top-k truncation)
     passing = scored_rel
     if dedup_fields:
         seen: dict[tuple[str | None, ...], int] = {}
-        deduped: list[tuple[Job, float]] = []
-        for job, rel in passing:
+        deduped: list[tuple[Job, float, dict[int, float]]] = (
+            []
+        )
+        for job, rel, groups in passing:
             key = tuple(getattr(job, f) for f in dedup_fields)
             if key not in seen:
                 seen[key] = len(deduped)
-                deduped.append((job, rel))
+                deduped.append((job, rel, groups))
         logger.info(
             "dedup unique=%d fields=%s",
             len(deduped),
@@ -224,7 +255,12 @@ async def _run(
         passing = deduped
 
     passing = passing[:top_k]
-    unique_jobs = [j for j, _ in passing]
+    if passing:
+        cutoff = passing[-1][1]
+        logger.info(
+            "top_k cutoff=%d score=%.4f", top_k, cutoff
+        )
+    unique_jobs = [j for j, _, _ in passing]
 
     if skip_score:
         # Write unsorted jobs

@@ -28,12 +28,13 @@ def parse_query(text: str) -> list[str]:
 
 def score_relevance(
     queries: list[str], jobs: list[Job]
-) -> list[tuple[Job, float]]:
+) -> list[tuple[Job, float, dict[int, float]]]:
     """FTS5-score each job against query groups.
 
     Runs each query group independently, takes max score
-    per job across groups. Returns all jobs with scores,
-    sorted descending.
+    per job across groups. Returns all jobs with
+    (job, max_score, {group_index: score}), sorted
+    descending by max_score.
     """
     if not jobs:
         return []
@@ -55,7 +56,10 @@ def score_relevance(
         )
 
         scores = [0.0] * len(jobs)
-        for query in queries:
+        group_scores: list[dict[int, float]] = [
+            {} for _ in jobs
+        ]
+        for gi, query in enumerate(queries):
             # bm25 weights: title=5x, description=1x,
             # company=0x, location=3x
             try:
@@ -71,13 +75,22 @@ def score_relevance(
                 ) from e
             # Normalize within this group so each group
             # contributes on a 0-1 scale before MAX.
-            group_max = max((-bm25 for _, bm25 in rows), default=0.0)
+            group_max = max(
+                (-bm25 for _, bm25 in rows), default=0.0
+            )
             for rowid, bm25 in rows:
-                normalized = -bm25 / group_max if group_max else 0.0
-                scores[rowid] = max(scores[rowid], normalized)
+                normalized = (
+                    -bm25 / group_max if group_max else 0.0
+                )
+                group_scores[rowid][gi] = normalized
+                scores[rowid] = max(
+                    scores[rowid], normalized
+                )
     finally:
         conn.close()
 
-    results = list(zip(jobs, scores, strict=True))
+    results = list(
+        zip(jobs, scores, group_scores, strict=True)
+    )
     results.sort(key=lambda x: x[1], reverse=True)
     return results
