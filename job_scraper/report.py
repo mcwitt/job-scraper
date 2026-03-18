@@ -72,6 +72,9 @@ TEMPLATE = """\
   .conns { text-align: center; }
   .date { white-space: nowrap;
     font-size: 0.85em; }
+  .search { min-width: 200px;
+    cursor: text; }
+  .search-hide { display: none !important; }
 </style>
 </head>
 <body>
@@ -81,7 +84,11 @@ TEMPLATE = """\
     datetime="{{ generated_at }}"></time>
   &middot; {{ jobs | length }} jobs scored</p>
 <div style="display: flex; gap: 1rem;
-  align-items: start; flex-wrap: wrap;">
+  align-items: start; flex-wrap: wrap;
+  margin-bottom: 1rem;">
+  <input type="text" id="search" class="btn search"
+    placeholder="Filter jobs\u2026"
+    autocomplete="off" spellcheck="false">
   <div class="col-toggle">
     <button class="btn" id="col-btn"
       >Columns &#9662;</button>
@@ -106,13 +113,13 @@ TEMPLATE = """\
       <th class="narrow"
         title="Fit for role">Fit</th>
       <th data-sort-desc>Posted</th>
-      <th>Title</th>
-      <th>Company</th>
+      <th data-search>Title</th>
+      <th data-search>Company</th>
       <th title="1st-degree connections">1st</th>
       <th title="2nd-degree connections">2nd</th>
-      <th>Team</th>
-      <th>Location</th>
-      <th>Compensation</th>
+      <th data-search>Team</th>
+      <th data-search>Location</th>
+      <th data-search>Compensation</th>
       <th>Scraped</th>
     </tr>
   </thead>
@@ -268,6 +275,7 @@ document.addEventListener('click', function() {
 });
 (function() {
   var showPage = initPager(50);
+  initSearch(function() { showPage(0); });
   initColumns([
     {name: 'Score', on: true},
     {name: 'Interest', on: false},
