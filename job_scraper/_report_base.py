@@ -46,10 +46,20 @@ body { font-family: system-ui, sans-serif;
 h1 { margin-bottom: 0.3rem; font-size: 1.5rem; }
 .meta { font-size: 0.85em; color: var(--muted);
   margin-bottom: 1rem; }
-table { width: 100%; border-collapse: collapse;
-  background: var(--table-bg); border-radius: 8px;
-  overflow: hidden; box-shadow: var(--shadow);
+table { width: 100%; border-collapse: separate;
+  border-spacing: 0;
+  background: var(--table-bg);
+  box-shadow: var(--shadow);
   font-size: 0.85em; }
+thead tr:first-child th:first-child {
+  border-top-left-radius: 8px; }
+thead tr:first-child th:last-child {
+  border-top-right-radius: 8px; }
+tbody tr:last-child td:first-child {
+  border-bottom-left-radius: 8px; }
+tbody tr:last-child td:last-child {
+  border-bottom-right-radius: 8px; }
+tbody tr:last-child td { border-bottom: none; }
 th, td { padding: 0.4rem 0.6rem; text-align: left;
   border-bottom: 1px solid var(--border); }
 th { background: var(--th-bg); font-weight: 600;
