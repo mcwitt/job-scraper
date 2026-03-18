@@ -63,7 +63,7 @@ tbody tr:last-child td { border-bottom: none; }
 th, td { padding: 0.4rem 0.6rem; text-align: left;
   border-bottom: 1px solid var(--border); }
 th { background: var(--th-bg); font-weight: 600;
-  position: sticky; top: 0; cursor: pointer;
+  position: sticky; top: 0; z-index: 1; cursor: pointer;
   user-select: none; white-space: nowrap; }
 th::after { content: ""; display: inline-block;
   width: 0.6em; margin-left: 0.3em; }
