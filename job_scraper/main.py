@@ -187,6 +187,15 @@ async def _run(
     score_cache_path = cache_dir / "score_interest.jsonl"
     output_path = output_dir / "jobs.jsonl"
 
+    # Load eval assertions if present
+    evals_path = Path("evals.toml")
+    filter_assertions: list = []
+    score_assertions: list = []
+    if evals_path.exists():
+        from job_scraper.eval import load_assertions
+
+        filter_assertions, score_assertions = load_assertions(evals_path)
+
     # FTS5 relevance scoring
     queries = parse_query(keywords_path.read_text())
     scored_rel = score_relevance(queries, all_jobs)
@@ -234,6 +243,19 @@ async def _run(
         logger.info(
             "wrote jobs count=%d path=%s", len(unique_jobs), output_path
         )
+        if filter_assertions:
+            from job_scraper.eval import render_eval_report, run_filter_evals
+
+            eval_results = run_filter_evals(filter_assertions, scored_rel)
+            eval_report_path = output_dir / "eval_report.html"
+            render_eval_report(eval_results, eval_report_path)
+            n_pass = sum(r.passed for r in eval_results)
+            logger.info(
+                "eval pass=%d/%d report=%s",
+                n_pass,
+                len(eval_results),
+                eval_report_path,
+            )
         return
 
     # Score
@@ -315,6 +337,29 @@ async def _run(
         report_path = output_dir / "report.html"
         render_report(scored, report_path, lookup=lookup)
         logger.info("wrote report path=%s", report_path)
+
+    if filter_assertions or score_assertions:
+        from job_scraper.eval import (
+            render_eval_report,
+            run_filter_evals,
+            run_score_evals,
+        )
+
+        eval_results = []
+        if filter_assertions:
+            eval_results += run_filter_evals(filter_assertions, scored_rel)
+        if score_assertions:
+            eval_results += run_score_evals(score_assertions, scored)
+        if eval_results:
+            eval_report_path = output_dir / "eval_report.html"
+            render_eval_report(eval_results, eval_report_path)
+            n_pass = sum(r.passed for r in eval_results)
+            logger.info(
+                "eval pass=%d/%d report=%s",
+                n_pass,
+                len(eval_results),
+                eval_report_path,
+            )
 
 
 @app.command()

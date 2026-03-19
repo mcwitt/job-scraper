@@ -77,6 +77,7 @@ Output goes to `data/output/` by default:
 - `jobs_relevance.jsonl` — all jobs with FTS5 relevance scores
 - `jobs.jsonl` — final ranked output
 - `report.html` — interactive HTML report (with `--report`)
+- `eval_report.html` — pass/fail eval report (when `evals.toml` exists)
 
 ## Architecture
 
@@ -144,6 +145,32 @@ Describes what you're looking for in your next role: target titles, ideal charac
 ### `resume.md` — recruiter-fit scoring
 
 Your resume in Markdown. Claude reads this alongside each job posting to produce a **fit score** — how likely a recruiter would be to advance your application based on your background and experience. This is scored independently from interest so you can see roles you'd love but might be a stretch, and roles you're qualified for but might not want.
+
+### `evals.toml` — pipeline quality assertions
+
+Optional. When present, the pipeline automatically checks whether specific jobs (identified by URL) appear in the expected position at the filter and/or score stage, and writes `data/output/eval_report.html`.
+
+Copy `evals.example.toml` to get started:
+
+```bash
+cp evals.example.toml evals.toml
+```
+
+Two assertion types:
+
+- `[[filter]]` — checked against the full relevance-ranked list (all scraped jobs, before dedup/truncation). Useful for verifying that a known-good job survives the keyword filter.
+- `[[score]]` — checked against the final interest-score-ranked list. Only runs when `--skip-score` is not passed.
+
+Each assertion has four fields:
+
+| Field | Description |
+|-------|-------------|
+| `url` | Exact job URL to look up |
+| `k` | Rank threshold |
+| `in_top_k` | `true` if the job should be within rank `k`, `false` if it should not |
+| `label` | Human-readable description shown in the report |
+
+An assertion **passes** when the job is found and `(rank <= k) == in_top_k`. If the URL isn't found in the pipeline output at all, the assertion fails and the report shows "not found".
 
 ## NixOS deployment
 

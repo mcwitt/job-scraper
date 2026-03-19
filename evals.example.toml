@@ -1,0 +1,25 @@
+# Copy to evals.toml and fill in real URLs from your scraped output.
+# Run the pipeline once with --skip-score to get URLs from
+# data/output/jobs_relevance.jsonl, then add assertions here.
+
+# Filter assertions: checked against relevance-ranked jobs
+# (all scraped jobs, before dedup/truncation).
+[[filter]]
+url      = "https://jobs.ashbyhq.com/anthropic/abc123"
+k        = 20
+in_top_k = true
+label    = "Anthropic SE - should survive keyword filter"
+
+# Score assertions: checked against interest-score-ranked jobs
+# (only runs when --skip-score is NOT passed).
+[[score]]
+url      = "https://jobs.ashbyhq.com/anthropic/abc123"
+k        = 10
+in_top_k = true
+label    = "Anthropic SE - should rank top-10 by interest"
+
+[[score]]
+url      = "https://jobs.lever.co/openai/xyz"
+k        = 10
+in_top_k = false
+label    = "Junior ML role - should not be in top-10"
