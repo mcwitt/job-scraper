@@ -14,20 +14,6 @@
     }@inputs:
     let
       forEachSystem = nixpkgs.lib.genAttrs (import systems);
-      pythonFor =
-        system:
-        nixpkgs.legacyPackages.${system}.python3.withPackages (
-          ps: with ps; [
-            anthropic
-            beautifulsoup4
-            dacite
-            httpx
-            jinja2
-            lxml
-            mistune
-            typer
-          ]
-        );
     in
     {
       # Run the hooks with `nix fmt`.
@@ -61,7 +47,9 @@
                 {
                   enable = true;
                   package = pkgs.pyrefly;
-                  entry = "${lib.getExe config.package} check --python-interpreter-path ${pythonFor system}/bin/python3";
+                  entry = "${lib.getExe config.package} check --python-interpreter-path ${
+                    pkgs.python3.withPackages (_: self.packages.${system}.default.dependencies)
+                  }/bin/python3";
                   types = [ "python" ];
                 }
               );
@@ -110,7 +98,8 @@
           in
           pkgs.mkShell {
             inherit shellHook;
-            packages = [ (pythonFor system) ];
+            inputsFrom = [ self.packages.${system}.default ];
+            packages = [ ]; # additional dev shell packages here
             buildInputs = enabledPackages;
           };
       });
