@@ -17,16 +17,31 @@ let
   cfg = config.services.job-scraper;
   pkg = cfg.package;
 
+  # Strip # comments and blank lines from a keywords string,
+  # producing a single FTS5 expression.
+  parseKeywords =
+    text:
+    concatStringsSep " " (
+      builtins.filter (s: s != "") (
+        map (
+          line:
+          let
+            stripped = lib.trim line;
+          in
+          if stripped == "" || lib.hasPrefix "#" stripped then "" else stripped
+        ) (lib.splitString "\n" text)
+      )
+    );
+
   # Generate per-user config files in the Nix store
   userFiles =
     name: ucfg:
     let
       preferencesFile = pkgs.writeText "${name}-preferences.md" ucfg.preferences;
       resumeFile = pkgs.writeText "${name}-resume.md" ucfg.resume;
-      keywordsFile = pkgs.writeText "${name}-keywords" ucfg.keywords;
     in
     {
-      inherit preferencesFile resumeFile keywordsFile;
+      inherit preferencesFile resumeFile;
     };
 
   stateDir = "/var/lib/job-scraper";
@@ -57,7 +72,8 @@ let
                 "--report"
                 "--preferences ${files.preferencesFile}"
                 "--resume ${files.resumeFile}"
-                "--keywords ${files.keywordsFile}"
+                "--keywords"
+                "'${parseKeywords ucfg.keywords}'"
                 "--cache-dir ${userDir}/cache"
                 "--output-dir ${userDir}/output"
                 "--model ${s.model}"

@@ -18,7 +18,7 @@ import typer
 
 from job_scraper.cache import open_cache
 from job_scraper.models import Job, to_dict
-from job_scraper.relevance import filter_relevant, parse_query
+from job_scraper.relevance import filter_relevant
 from job_scraper.scraper import ScrapeFn, discover
 from job_scraper.scraper.http import Http
 
@@ -218,7 +218,7 @@ async def _run(
     max_concurrent_api: int,
     skip_score: bool,
     report: bool,
-    keywords_path: Path,
+    keywords: str | None,
     top_k: int,
     linkedin_dir: Path,
     dedup_fields: tuple[str, ...],
@@ -260,13 +260,15 @@ async def _run(
     all_jobs = _dedup(all_jobs, dedup_fields)
 
     # --- Keywords boolean filter ---
-    query = parse_query(keywords_path.read_text())
-    filtered_jobs = filter_relevant(query, all_jobs)
-    logger.info(
-        "keyword filter total=%d matched=%d",
-        len(all_jobs),
-        len(filtered_jobs),
-    )
+    if keywords:
+        filtered_jobs = filter_relevant(keywords, all_jobs)
+        logger.info(
+            "keyword filter total=%d matched=%d",
+            len(all_jobs),
+            len(filtered_jobs),
+        )
+    else:
+        filtered_jobs = all_jobs
 
     if skip_score:
         with output_path.open("w") as f:
@@ -504,8 +506,9 @@ def run(
         bool, typer.Option("--report", help="Generate HTML report")
     ] = False,
     keywords: Annotated[
-        Path, typer.Option(help="Path to keywords file")
-    ] = Path("keywords"),
+        str | None,
+        typer.Option(help="FTS5 expression for boolean pre-filtering"),
+    ] = None,
     top_k: Annotated[
         int,
         typer.Option(help="Keep at most K jobs for LLM scoring"),
@@ -616,7 +619,7 @@ def run(
             max_concurrent_api=max_concurrent_api,
             skip_score=skip_score,
             report=report,
-            keywords_path=keywords,
+            keywords=keywords,
             top_k=top_k,
             linkedin_dir=linkedin_dir,
             dedup_fields=fields,

@@ -5,7 +5,7 @@ Scrape job postings from ATS platforms, score them against candidate preferences
 ## Quick start
 
 ```bash
-# Scrape all discovered sources + FTS5 relevance filter only (no LLM scoring)
+# Scrape all discovered sources, skip scoring
 python -m job_scraper.main --skip-score
 
 # Full pipeline (requires ANTHROPIC_API_KEY)
@@ -37,7 +37,6 @@ Key files:
 - `job_scraper/scraper/phenom.py` — Phenom People `scrape_board()` factory
 - `job_scraper/scraper/rippling.py` — Rippling `scrape_board()` factory
 - `job_scraper/scraper/smartrecruiters.py` — SmartRecruiters `scrape_board()` factory
-- `keywords` — single FTS5 expression for boolean pre-filtering (`"phrases"`, `AND`/`OR`/`NOT`); copy from `keywords.example`
 - `preferences.md` — candidate job preferences for interest scoring; copy from `preferences.example.md`
 - `resume.md` — candidate resume for recruiter scoring; copy from `resume.example.md`
 

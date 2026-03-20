@@ -31,7 +31,6 @@ pip install -e .
 Copy and customize the personal config files (see [Configuration files](#configuration-files) for details):
 
 ```bash
-cp keywords.example keywords
 cp preferences.example.md preferences.md
 cp resume.example.md resume.md
 ```
@@ -53,11 +52,14 @@ nix develop    # or use direnv
 ## Usage
 
 ```bash
-# Scrape + keyword filter only (no LLM scoring)
+# Scrape only (no filtering or scoring)
 python -m job_scraper.main --skip-score
 
+# Boolean pre-filter with FTS5 expression
+python -m job_scraper.main --skip-score --keywords 'title:engineer AND location:remote'
+
 # Full pipeline: scrape + filter + surrogate rank + score + report
-python -m job_scraper.main --report
+python -m job_scraper.main --keywords '(title:engineer OR title:scientist) NOT title:intern' --report
 
 # Customize scoring model
 python -m job_scraper.main --model claude-haiku-4-5-20251001
@@ -134,13 +136,11 @@ async def scrape(http: Http) -> AsyncIterator[Job]:
 
 All personal config files are gitignored. Copy from `*.example.*` to get started.
 
-### `keywords` — boolean prefilter
+### `--keywords` — boolean prefilter
 
-Used in the **keyword filter** step to cheaply discard irrelevant jobs before surrogate ranking and LLM scoring. This is a single SQLite FTS5 query expression — jobs that don't match are filtered out entirely.
+Pass a [SQLite FTS5 query expression](https://www.sqlite.org/fts5.html#full_text_query_syntax) via `--keywords` to cheaply discard irrelevant jobs before surrogate ranking and LLM scoring. Jobs that don't match are filtered out entirely. When omitted, no filtering is applied.
 
 Syntax: `"phrases"`, `AND`/`OR`/`NOT`, `(grouping)`. Prefix terms with `title:` or `description:` to restrict matching to that column.
-
-See `keywords.example` for a full example.
 
 ### `preferences.md` — interest scoring
 

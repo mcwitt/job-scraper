@@ -3,20 +3,6 @@ import sqlite3
 from job_scraper.models import Job
 
 
-def parse_query(text: str) -> str:
-    """Parse keywords file into a single FTS5 query.
-
-    Strip # comments and blank lines, join remaining lines.
-    """
-    lines: list[str] = []
-    for line in text.splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
-            continue
-        lines.append(stripped)
-    return " ".join(lines)
-
-
 def filter_relevant(
     query: str, jobs: list[Job]
 ) -> list[Job]:
