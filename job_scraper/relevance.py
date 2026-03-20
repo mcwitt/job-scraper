@@ -1,6 +1,9 @@
+import logging
 import sqlite3
 
 from job_scraper.models import Job
+
+logger = logging.getLogger(__name__)
 
 
 def parse_query(text: str) -> list[str]:
@@ -26,6 +29,63 @@ def parse_query(text: str) -> list[str]:
     return groups
 
 
+def prefilter(
+    queries: list[str], jobs: list[Job]
+) -> list[Job]:
+    """Boolean pre-filter using FTS5 MATCH.
+
+    Returns jobs that match ANY query group (union).
+    No scoring — just pass/fail.
+    """
+    if not jobs or not queries:
+        return []
+
+    conn = sqlite3.connect(":memory:")
+    try:
+        conn.execute(
+            "CREATE VIRTUAL TABLE docs USING fts5"
+            "(title, description, company, location)"
+        )
+        conn.executemany(
+            "INSERT INTO docs(rowid, title, description,"
+            " company, location) VALUES (?, ?, ?, ?, ?)",
+            (
+                (
+                    i,
+                    job.title,
+                    job.description,
+                    job.company,
+                    job.location or "",
+                )
+                for i, job in enumerate(jobs)
+            ),
+        )
+
+        passing: set[int] = set()
+        for query in queries:
+            try:
+                rows = conn.execute(
+                    "SELECT rowid FROM docs"
+                    " WHERE docs MATCH ?",
+                    (query,),
+                ).fetchall()
+            except sqlite3.OperationalError as e:
+                raise ValueError(
+                    f"Bad FTS5 query: {query!r}"
+                ) from e
+            passing.update(r[0] for r in rows)
+            logger.info(
+                "prefilter group matched=%d"
+                " cumulative=%d",
+                len(rows),
+                len(passing),
+            )
+    finally:
+        conn.close()
+
+    return [jobs[i] for i in sorted(passing)]
+
+
 def score_relevance(
     queries: list[str], jobs: list[Job]
 ) -> list[tuple[Job, float, dict[int, float]]]:
@@ -49,8 +109,13 @@ def score_relevance(
             "INSERT INTO docs(rowid, title, description,"
             " company, location) VALUES (?, ?, ?, ?, ?)",
             (
-                (i, job.title, job.description,
-                 job.company, job.location or "")
+                (
+                    i,
+                    job.title,
+                    job.description,
+                    job.company,
+                    job.location or "",
+                )
                 for i, job in enumerate(jobs)
             ),
         )
@@ -80,7 +145,9 @@ def score_relevance(
             )
             for rowid, bm25 in rows:
                 normalized = (
-                    -bm25 / group_max if group_max else 0.0
+                    -bm25 / group_max
+                    if group_max
+                    else 0.0
                 )
                 group_scores[rowid][gi] = normalized
                 scores[rowid] = max(

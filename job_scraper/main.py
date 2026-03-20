@@ -15,9 +15,32 @@ import typer
 
 from job_scraper.cache import open_cache
 from job_scraper.models import Job, to_dict
-from job_scraper.relevance import parse_query, score_relevance
+from job_scraper.relevance import parse_query, prefilter
 from job_scraper.scraper import ScrapeFn, discover
 from job_scraper.scraper._http import Http
+from job_scraper.surrogate import (
+    augment_training_data,
+    config_hash,
+    select_for_scoring,
+)
+from job_scraper.surrogate import (
+    evaluate as surrogate_evaluate,
+)
+from job_scraper.surrogate import (
+    load as surrogate_load,
+)
+from job_scraper.surrogate import (
+    predict as surrogate_predict,
+)
+from job_scraper.surrogate import (
+    sample as surrogate_sample,
+)
+from job_scraper.surrogate import (
+    save as surrogate_save,
+)
+from job_scraper.surrogate import (
+    train as surrogate_train,
+)
 
 logger = logging.getLogger("job_scraper.main")
 app = typer.Typer()
@@ -187,95 +210,41 @@ async def _run(
     score_cache_path = cache_dir / "score_interest.jsonl"
     output_path = output_dir / "jobs.jsonl"
 
-    # FTS5 relevance scoring
+    # --- Boolean pre-filter (location + title exclusions) ---
     queries = parse_query(keywords_path.read_text())
-    scored_rel = score_relevance(queries, all_jobs)
-
-    # Write all jobs with relevance + per-group breakdown
-    rel_path = output_dir / "jobs_relevance.jsonl"
-    with rel_path.open("w") as f:
-        for job, rel, groups in scored_rel:
-            d = to_dict(job)
-            d["relevance"] = round(rel, 4)
-            d["relevance_groups"] = {
-                str(k): round(v, 4)
-                for k, v in sorted(groups.items())
-            }
-            f.write(json.dumps(d) + "\n")
+    filtered = prefilter(queries, all_jobs)
     logger.info(
-        "wrote relevance scores count=%d path=%s",
-        len(scored_rel),
-        rel_path,
+        "prefilter total=%d passing=%d",
+        len(all_jobs),
+        len(filtered),
     )
 
-    # Relevance distribution summary
-    all_scores = [rel for _, rel, _ in scored_rel]
-    if all_scores:
-        all_scores_sorted = sorted(all_scores)
-        n = len(all_scores_sorted)
-
-        def _percentile(k: int) -> float:
-            idx = min(int(n * k / 100), n - 1)
-            return all_scores_sorted[idx]
-
-        nonzero = sum(
-            1 for s in all_scores_sorted if s > 0
-        )
-        logger.info(
-            "relevance total=%d nonzero=%d top_k=%d"
-            " p50=%.4f p75=%.4f p90=%.4f p95=%.4f"
-            " max=%.4f",
-            n,
-            nonzero,
-            top_k,
-            _percentile(50),
-            _percentile(75),
-            _percentile(90),
-            _percentile(95),
-            all_scores_sorted[-1],
-        )
-
-    # Deduplicate by selected fields (before top-k truncation)
-    passing = scored_rel
+    # --- Deduplicate ---
     if dedup_fields:
         seen: dict[tuple[str | None, ...], int] = {}
-        deduped: list[tuple[Job, float, dict[int, float]]] = (
-            []
-        )
-        for job, rel, groups in passing:
-            key = tuple(getattr(job, f) for f in dedup_fields)
+        deduped: list[Job] = []
+        for job in filtered:
+            key = tuple(
+                getattr(job, f) for f in dedup_fields
+            )
             if key not in seen:
                 seen[key] = len(deduped)
-                deduped.append((job, rel, groups))
+                deduped.append(job)
         logger.info(
             "dedup unique=%d fields=%s",
             len(deduped),
             ",".join(dedup_fields),
         )
-        passing = deduped
+        filtered = deduped
 
-    passing = passing[:top_k]
-    if passing:
-        cutoff = passing[-1][1]
-        logger.info(
-            "top_k cutoff=%d score=%.4f", top_k, cutoff
-        )
-    unique_jobs = [j for j, _, _ in passing]
-
-    if skip_score:
-        # Write unsorted jobs
-        with output_path.open("w") as f:
-            for job in unique_jobs:
-                f.write(json.dumps(to_dict(job)) + "\n")
-        logger.info(
-            "wrote jobs count=%d path=%s", len(unique_jobs), output_path
-        )
-        return
-
-    # Score
+    # --- LLM scoring helper ---
     preferences_text = preferences_path.read_text()
     if not preferences_text.strip():
-        logger.warning("preferences is empty path=%s", preferences_path)
+        logger.warning(
+            "preferences is empty path=%s",
+            preferences_path,
+        )
+    resume_text = resume_path.read_text()
 
     import anthropic
 
@@ -287,40 +256,230 @@ async def _run(
     )
 
     companies = load_companies()
-
     fit_cache_path = cache_dir / "score_fit.jsonl"
     ai = anthropic.AsyncAnthropic()
 
-    resume_text = resume_path.read_text()
+    async def _llm_score(
+        jobs: list[Job],
+    ) -> tuple[dict, dict]:
+        async with (
+            open_cache(score_cache_path) as icache,
+            open_cache(fit_cache_path) as fcache,
+        ):
+            return await asyncio.gather(
+                score_interest(
+                    jobs,
+                    preferences_text,
+                    ai,
+                    model,
+                    icache,
+                    companies=companies,
+                    max_concurrent=max_concurrent_api,
+                ),
+                score_fit(
+                    jobs,
+                    resume_text,
+                    ai,
+                    model,
+                    fcache,
+                    companies=companies,
+                    max_concurrent=max_concurrent_api,
+                ),
+            )
 
-    async with (
-        open_cache(score_cache_path) as interest_cache,
-        open_cache(fit_cache_path) as fit_cache,
-    ):
-        interest_scores, fit_scores = await asyncio.gather(
-            score_interest(
-                unique_jobs,
-                preferences_text,
-                ai,
-                model,
-                interest_cache,
-                companies=companies,
-                max_concurrent=max_concurrent_api,
-            ),
-            score_fit(
-                unique_jobs,
-                resume_text,
-                ai,
-                model,
-                fit_cache,
-                companies=companies,
-                max_concurrent=max_concurrent_api,
-            ),
+    def _write_surrogate_jsonl(
+        ranked: list[
+            tuple[Job, float, float, float, float]
+        ],
+    ) -> None:
+        sur_path = output_dir / "jobs_surrogate.jsonl"
+        with sur_path.open("w") as f:
+            for job, combined, im, fm, unc in ranked:
+                d = to_dict(job)
+                d["surrogate_combined"] = round(
+                    combined, 4
+                )
+                d["surrogate_interest"] = round(im, 4)
+                d["surrogate_fit"] = round(fm, 4)
+                d["surrogate_uncertainty"] = round(
+                    unc, 4
+                )
+                f.write(json.dumps(d) + "\n")
+        logger.info(
+            "wrote surrogate scores count=%d path=%s",
+            len(ranked),
+            sur_path,
         )
 
-    # Merge into ScoredJob objects
+    def _log_distribution(
+        scores: list[float], label: str
+    ) -> None:
+        if not scores:
+            return
+        s = sorted(scores)
+        n = len(s)
+
+        def pct(k: int) -> float:
+            return s[min(int(n * k / 100), n - 1)]
+
+        logger.info(
+            "%s total=%d p50=%.4f p75=%.4f p90=%.4f"
+            " p95=%.4f max=%.4f",
+            label,
+            n,
+            pct(50),
+            pct(75),
+            pct(90),
+            pct(95),
+            s[-1],
+        )
+
+    # --- Surrogate model ---
+    cfg_hash = config_hash(preferences_text, resume_text)
+    surrogate_dir = cache_dir / "surrogate"
+    loaded = surrogate_load(surrogate_dir, cfg_hash)
+
+    if loaded is not None:
+        # -- Warm start --
+        vec, i_model, f_model, training_data = loaded
+        logger.info("surrogate warm start")
+
+        ranked = surrogate_predict(
+            vec, i_model, f_model, filtered
+        )
+        _log_distribution(
+            [c for _, c, *_ in ranked], "surrogate"
+        )
+        _write_surrogate_jsonl(ranked)
+
+        if skip_score:
+            top_jobs = [j for j, *_ in ranked[:top_k]]
+            with output_path.open("w") as f:
+                for job in top_jobs:
+                    f.write(
+                        json.dumps(to_dict(job)) + "\n"
+                    )
+            logger.info(
+                "wrote jobs count=%d path=%s",
+                len(top_jobs),
+                output_path,
+            )
+            return
+
+        to_score = select_for_scoring(ranked, top_k)
+        interest_scores, fit_scores = await _llm_score(
+            to_score
+        )
+
+        surrogate_evaluate(
+            ranked, interest_scores, fit_scores
+        )
+
+        training_data = augment_training_data(
+            to_score,
+            interest_scores,
+            fit_scores,
+            training_data,
+        )
+        vec, i_model, f_model = surrogate_train(
+            training_data
+        )
+        surrogate_save(
+            surrogate_dir,
+            vec,
+            i_model,
+            f_model,
+            training_data,
+            cfg_hash,
+        )
+
+        top_jobs = to_score
+
+    else:
+        # -- Cold start --
+        logger.info("surrogate cold start")
+
+        if skip_score:
+            with output_path.open("w") as f:
+                for job in filtered:
+                    f.write(
+                        json.dumps(to_dict(job)) + "\n"
+                    )
+            logger.warning(
+                "no surrogate model, wrote all filtered"
+                " jobs count=%d",
+                len(filtered),
+            )
+            return
+
+        bootstrap = surrogate_sample(filtered, 500)
+        logger.info(
+            "bootstrap sample=%d total=%d",
+            len(bootstrap),
+            len(filtered),
+        )
+
+        interest_scores, fit_scores = await _llm_score(
+            bootstrap
+        )
+
+        training_data = augment_training_data(
+            bootstrap, interest_scores, fit_scores, []
+        )
+        logger.info(
+            "bootstrap training_data=%d",
+            len(training_data),
+        )
+
+        vec, i_model, f_model = surrogate_train(
+            training_data
+        )
+
+        ranked = surrogate_predict(
+            vec, i_model, f_model, filtered
+        )
+        _log_distribution(
+            [c for _, c, *_ in ranked], "surrogate"
+        )
+        _write_surrogate_jsonl(ranked)
+
+        # Score top-k (cache skips already-scored)
+        top_jobs_candidates = [
+            j for j, *_ in ranked[:top_k]
+        ]
+        i_scores_topk, f_scores_topk = await _llm_score(
+            top_jobs_candidates
+        )
+        interest_scores.update(i_scores_topk)
+        fit_scores.update(f_scores_topk)
+
+        surrogate_evaluate(
+            ranked, interest_scores, fit_scores
+        )
+
+        training_data = augment_training_data(
+            top_jobs_candidates,
+            interest_scores,
+            fit_scores,
+            training_data,
+        )
+        vec, i_model, f_model = surrogate_train(
+            training_data
+        )
+        surrogate_save(
+            surrogate_dir,
+            vec,
+            i_model,
+            f_model,
+            training_data,
+            cfg_hash,
+        )
+
+        top_jobs = top_jobs_candidates
+
+    # --- Merge into ScoredJob objects ---
     scored = []
-    for job in unique_jobs:
+    for job in top_jobs:
         interest_data = interest_scores.get(job.hash)
         fit_data = fit_scores.get(job.hash)
         if interest_data is None or fit_data is None:
@@ -333,7 +492,6 @@ async def _run(
             )
         )
 
-    # Sort by priority (candidate * recruiter) descending
     def _priority(j: ScoredJob) -> float:
         return j.score_interest.score * j.score_fit.score
 
@@ -342,7 +500,11 @@ async def _run(
     with output_path.open("w") as f:
         for job in scored:
             f.write(json.dumps(to_dict(job)) + "\n")
-    logger.info("wrote scored jobs count=%d path=%s", len(scored), output_path)
+    logger.info(
+        "wrote scored jobs count=%d path=%s",
+        len(scored),
+        output_path,
+    )
 
     if report:
         from job_scraper.linkedin import load as load_linkedin
