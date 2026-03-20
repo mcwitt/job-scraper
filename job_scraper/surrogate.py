@@ -6,13 +6,21 @@ from pathlib import Path
 import numpy as np
 from scipy.sparse import spmatrix
 from scipy.stats import spearmanr
+from sklearn.ensemble import BaggingRegressor
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import Ridge
+from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.model_selection import cross_val_predict
 
 from job_scraper.models import Job
 
 logger = logging.getLogger(__name__)
+
+
+def _make_vectorizer() -> TfidfVectorizer:
+    return TfidfVectorizer(
+        max_features=5000, stop_words="english"
+    )
 
 
 @dataclass(frozen=True)
@@ -135,17 +143,40 @@ def _evaluate(
     return metrics
 
 
+def seed_by_similarity(
+    jobs: list[Job],
+    reference_text: str,
+    n: int,
+) -> list[Job]:
+    """Select jobs most similar to reference text via TF-IDF cosine."""
+    texts = [_text(j) for j in jobs]
+    texts.append(reference_text)
+    vec = _make_vectorizer()
+    X = vec.fit_transform(texts)
+    sims = cosine_similarity(X[:-1], X[-1:]).flatten()  # type: ignore[index]
+    indices = np.argsort(sims)[::-1][:n]
+    selected = [jobs[i] for i in indices]
+    logger.info(
+        "seed_by_similarity jobs=%d ref_len=%d "
+        "best=%.4f cutoff=%.4f",
+        len(jobs),
+        len(reference_text),
+        float(sims[indices[0]]) if len(indices) > 0 else 0.0,
+        float(sims[indices[-1]]) if len(indices) > 0 else 0.0,
+    )
+    return selected
+
+
 def train(
     examples: list[Example],
-) -> tuple[TfidfVectorizer, Ridge, Metrics]:
+    n_models: int = 10,
+) -> tuple[TfidfVectorizer, Ridge, list[Ridge], Metrics]:
     texts = [_text(ex) for ex in examples]
     targets = np.array([
         ex.interest_score * ex.fit_score
         for ex in examples
     ])
-    vectorizer = TfidfVectorizer(
-        max_features=5000, stop_words="english"
-    )
+    vectorizer = _make_vectorizer()
     X = vectorizer.fit_transform(texts)
     model = Ridge(alpha=1.0)
     model.fit(X, targets)
@@ -154,8 +185,43 @@ def train(
         len(examples),
         len(vectorizer.get_feature_names_out()),
     )
+
+    # Bootstrap ensemble for uncertainty estimation
+    bag = BaggingRegressor(
+        estimator=Ridge(alpha=1.0),
+        n_estimators=n_models,
+        bootstrap=True,
+    )
+    bag.fit(X, targets)
+    ensemble: list[Ridge] = bag.estimators_  # type: ignore[assignment]
+
     metrics = _evaluate(X, targets)
-    return vectorizer, model, metrics
+    return vectorizer, model, ensemble, metrics
+
+
+def select_by_disagreement(
+    vectorizer: TfidfVectorizer,
+    ensemble: list[Ridge],
+    jobs: list[Job],
+    n: int,
+) -> list[Job]:
+    """Select jobs where ensemble models disagree most."""
+    texts = [_text(j) for j in jobs]
+    X = vectorizer.transform(texts)
+    preds = np.array([m.predict(X) for m in ensemble])
+    variance = preds.var(axis=0)
+    indices = np.argsort(variance)[::-1][:n]
+    logger.info(
+        "select_by_disagreement jobs=%d n=%d "
+        "max_var=%.6f cutoff_var=%.6f",
+        len(jobs),
+        n,
+        float(variance[indices[0]]) if len(indices) > 0 else 0.0,
+        float(variance[indices[-1]])
+        if len(indices) > 0
+        else 0.0,
+    )
+    return [jobs[i] for i in indices]
 
 
 def rank_agreement(

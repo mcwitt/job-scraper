@@ -82,6 +82,7 @@ let
                 "--max-concurrent-api ${toString s.maxConcurrentApi}"
                 "--num-cold-start ${toString s.numColdStart}"
                 "--num-explore ${toString s.numExplore}"
+                "--num-active-iters ${toString s.numActiveIters}"
               ]
               ++ lib.optional (
                 ucfg.linkedinConnectionsDir != null
@@ -174,6 +175,11 @@ in
         type = types.int;
         default = 20;
         description = "Unscored jobs to explore each warm-start run.";
+      };
+      numActiveIters = mkOption {
+        type = types.int;
+        default = 5;
+        description = "Active learning iterations during cold start.";
       };
     };
 

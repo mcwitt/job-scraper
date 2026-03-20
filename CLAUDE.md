@@ -14,12 +14,12 @@ python -m job_scraper.main
 
 ## Architecture
 
-**Pipeline:** scrape → dedupe → keywords boolean filter → surrogate ranking → LLM score top-k → sort → output
+**Pipeline:** scrape → dedupe → keywords boolean filter → active learning (similarity seed / ensemble disagreement exploration) → surrogate ranking → LLM score top-k → sort → output
 
 Key files:
 - `job_scraper/main.py` — CLI (Typer) and pipeline orchestration
 - `job_scraper/relevance.py` — FTS5 boolean filtering against keywords
-- `job_scraper/surrogate.py` — TF-IDF + Ridge surrogate trained on LLM scores
+- `job_scraper/surrogate.py` — TF-IDF + Ridge surrogate with bootstrap ensemble for active learning
 - `job_scraper/scorer.py` — Claude scoring with prompt caching and structured output
 - `job_scraper/companies/` — company context package (bundled `.md` files + `canonicalize`/`load_companies`)
 - `job_scraper/cache.py` — JSONL append-log cache with TTL

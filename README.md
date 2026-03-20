@@ -67,6 +67,9 @@ python -m job_scraper.main --model claude-haiku-4-5-20251001
 # Keep only the top 50 jobs for LLM scoring (default: 200)
 python -m job_scraper.main --top-k 50
 
+# Control active learning: seed size, exploration budget, iterations
+python -m job_scraper.main --num-cold-start 100 --num-explore 10 --num-active-iters 2
+
 # Limit concurrent Claude API requests (default: 10)
 # Lower this if you're getting rate limited by the Anthropic API
 python -m job_scraper.main --max-concurrent-api 5
@@ -86,7 +89,7 @@ Output goes to `data/output/` by default:
 
 ## Architecture
 
-**Pipeline:** scrape → dedupe → keywords boolean filter → surrogate ranking → LLM score top-k → sort → output
+**Pipeline:** scrape → dedupe → keywords boolean filter → active learning (similarity seed / ensemble disagreement exploration) → surrogate ranking → LLM score top-k → sort → output
 
 ### Scraper discovery
 
@@ -98,7 +101,7 @@ Every `.py` file in `job_scraper/scraper/` whose name does not start with `_` is
 |--------|---------|
 | `job_scraper/main.py` | CLI (Typer) and pipeline orchestration |
 | `job_scraper/relevance.py` | FTS5 boolean filtering against `keywords` |
-| `job_scraper/surrogate.py` | TF-IDF + Ridge surrogate trained on LLM scores |
+| `job_scraper/surrogate.py` | TF-IDF + Ridge surrogate with bootstrap ensemble for active learning |
 | `job_scraper/scorer.py` | Claude scoring with prompt caching and structured output |
 | `job_scraper/cache.py` | JSONL append-log cache with TTL |
 | `job_scraper/models.py` | `Job` / `ScoredJob` frozen dataclasses |
@@ -175,6 +178,7 @@ Add the flake as an input and import the module:
             settings = {
               model = "claude-haiku-4-5-20251001";
               topK = 200;
+              numActiveIters = 3;  # active learning iterations on cold start
             };
 
             users.alice = {

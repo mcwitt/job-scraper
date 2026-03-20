@@ -2,7 +2,6 @@ import asyncio
 import dataclasses
 import json
 import logging
-import random
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
@@ -225,6 +224,7 @@ async def _run(
     resume_path: Path,
     num_cold_start: int,
     num_explore: int,
+    num_active_iters: int,
     scrape_only: bool = False,
     input_jobs: Path | None = None,
     status_report: bool = False,
@@ -292,6 +292,8 @@ async def _run(
         load_examples,
         predict,
         rank_agreement,
+        seed_by_similarity,
+        select_by_disagreement,
         train,
     )
 
@@ -331,22 +333,7 @@ async def _run(
     ]
     cold_start = len(examples) == 0
 
-    if cold_start:
-        explore_sample = random.sample(
-            unscored, min(num_cold_start, len(unscored))
-        )
-        logger.info(
-            "cold start: sampling %d jobs for initial training",
-            len(explore_sample),
-        )
-    else:
-        explore_sample = random.sample(
-            unscored, min(num_explore, len(unscored))
-        )
-        logger.info(
-            "warm start: sampling %d explore jobs",
-            len(explore_sample),
-        )
+    reference = preferences_text + "\n\n" + resume_text
 
     score_cache_path = cache_dir / "score_interest.jsonl"
     fit_cache_path = cache_dir / "score_fit.jsonl"
@@ -355,10 +342,15 @@ async def _run(
         open_cache(score_cache_path) as interest_cache,
         open_cache(fit_cache_path) as fit_cache,
     ):
-        # Score explore batch
-        if explore_sample:
-            explore_results = await _score_jobs(
-                explore_sample,
+
+        async def _score_and_learn(
+            batch: list[Job],
+        ) -> None:
+            nonlocal examples
+            if not batch:
+                return
+            results = await _score_jobs(
+                batch,
                 preferences_text,
                 resume_text,
                 ai,
@@ -369,19 +361,93 @@ async def _run(
                 max_concurrent_api,
             )
             new_examples = _to_examples(
-                explore_sample, explore_results
+                batch, results
             )
             append_examples(training_path, new_examples)
             examples = examples + new_examples
-            scored_hashes.update(ex.hash for ex in new_examples)
+            scored_hashes.update(
+                ex.hash for ex in new_examples
+            )
             logger.info(
-                "explore scored=%d total_training=%d",
+                "scored=%d total_training=%d",
                 len(new_examples),
                 len(examples),
             )
 
-        # Train surrogate and rank
-        vectorizer, ridge, cv_metrics = train(examples)
+        scored_before = len(scored_hashes)
+
+        if cold_start:
+            # Phase 1: Seed by similarity
+            seed_sample = seed_by_similarity(
+                unscored, reference, num_cold_start
+            )
+            logger.info(
+                "cold start: selected %d most similar jobs",
+                len(seed_sample),
+            )
+            await _score_and_learn(seed_sample)
+
+            # Phase 2: Active learning loop
+            for iteration in range(num_active_iters):
+                unscored = [
+                    j
+                    for j in filtered_jobs
+                    if j.hash not in scored_hashes
+                ]
+                if not unscored:
+                    logger.info(
+                        "active learning: no unscored jobs remain"
+                    )
+                    break
+                logger.info(
+                    "active learning: unscored=%d",
+                    len(unscored),
+                )
+                vec, _, ensemble, iter_metrics = train(
+                    examples
+                )
+                logger.info(
+                    "active learning iter=%d r2=%.4f"
+                    " spearman=%.4f",
+                    iteration + 1,
+                    iter_metrics.cv_r2,
+                    iter_metrics.cv_spearman,
+                )
+                explore = select_by_disagreement(
+                    vec,
+                    ensemble,
+                    unscored,
+                    min(num_explore, len(unscored)),
+                )
+                await _score_and_learn(explore)
+        else:
+            # Warm start: disagreement-based exploration
+            logger.info(
+                "warm start: unscored=%d", len(unscored)
+            )
+            vec, _, ensemble, warm_metrics = train(examples)
+            logger.info(
+                "warm start: r2=%.4f spearman=%.4f",
+                warm_metrics.cv_r2,
+                warm_metrics.cv_spearman,
+            )
+            explore = select_by_disagreement(
+                vec,
+                ensemble,
+                unscored,
+                min(num_explore, len(unscored)),
+            )
+            await _score_and_learn(explore)
+
+        scored_during = len(scored_hashes) - scored_before
+        logger.info(
+            "exploration complete: scored=%d total_training=%d",
+            scored_during,
+            len(examples),
+        )
+
+        # Final train + rank
+        vectorizer, ridge, _, cv_metrics = train(examples)
 
         surrogate_scores = predict(
             (vectorizer, ridge), filtered_jobs
@@ -462,27 +528,6 @@ async def _run(
                 len(topk_surr),
                 topk_spearman,
             )
-
-        # Explore surprises: jobs the surrogate underrated
-        if explore_sample:
-            for job in explore_sample:
-                data = explore_results.get(job.hash)
-                if data is None:
-                    continue
-                actual = (
-                    data["interest"]["score"]
-                    * data["fit"]["score"]
-                )
-                surr = surr_by_hash.get(job.hash)
-                if surr is not None and actual > 0.3 and surr < 0.1:
-                    logger.info(
-                        "surprise: %s @ %s actual=%.3f"
-                        " surrogate=%.3f",
-                        job.title,
-                        job.company,
-                        actual,
-                        surr,
-                    )
 
         # Persist metrics
         metrics_path = cache_dir / "surrogate_metrics.jsonl"
@@ -629,6 +674,12 @@ def run(
             help="Unscored jobs to explore each warm-start run"
         ),
     ] = 20,
+    num_active_iters: Annotated[
+        int,
+        typer.Option(
+            help="Active learning iterations during cold start"
+        ),
+    ] = 5,
 ) -> None:
     """Scrape and score job postings."""
     if scrape_only and input_jobs is not None:
@@ -693,6 +744,7 @@ def run(
             exclude=exclude_set,
             num_cold_start=num_cold_start,
             num_explore=num_explore,
+            num_active_iters=num_active_iters,
         )
     )
 
