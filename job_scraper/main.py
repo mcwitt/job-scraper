@@ -267,13 +267,11 @@ async def _run(
             )
 
     def _write_surrogate_jsonl(
-        ranked: list[
-            tuple[Job, float, float, float, float]
-        ],
+        ranked: list[tuple[Job, float, float, float]],
     ) -> None:
         sur_path = output_dir / "jobs_surrogate.jsonl"
         with sur_path.open("w") as f:
-            for job, combined, im, fm, unc in ranked:
+            for job, combined, im, fm in ranked:
                 d = to_dict(job)
                 p = surrogate.SCORE_PRECISION
                 d["surrogate_combined"] = round(
@@ -281,9 +279,6 @@ async def _run(
                 )
                 d["surrogate_interest"] = round(im, p)
                 d["surrogate_fit"] = round(fm, p)
-                d["surrogate_uncertainty"] = round(
-                    unc, p
-                )
                 f.write(json.dumps(d) + "\n")
         logger.info(
             "wrote surrogate scores count=%d path=%s",
@@ -349,8 +344,8 @@ async def _run(
         top_jobs = [j for j, *_ in ranked[:top_k]]
 
         # Exploration jobs: for surrogate improvement
-        explore_jobs = surrogate.select_for_scoring(
-            ranked[top_k:], explore_budget
+        explore_jobs = surrogate.select_explore(
+            ranked, top_k, explore_budget
         )
         all_to_score = top_jobs + explore_jobs
         logger.info(

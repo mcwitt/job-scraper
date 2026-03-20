@@ -5,10 +5,9 @@ import pickle
 import random
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
 
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import BayesianRidge
+from sklearn.linear_model import Ridge
 
 from job_scraper.models import Job
 
@@ -77,12 +76,8 @@ def config_hash(preferences: str, resume: str) -> str:
 
 def train(
     records: list[TrainingRecord],
-) -> tuple[
-    TfidfVectorizer,
-    BayesianRidge,
-    BayesianRidge,
-]:
-    """Fit TF-IDF + BayesianRidge for interest and fit."""
+) -> tuple[TfidfVectorizer, Ridge, Ridge]:
+    """Fit TF-IDF + Ridge for interest and fit."""
     texts = [r.text() for r in records]
     interest_targets = [r.interest for r in records]
     fit_targets = [r.fit for r in records]
@@ -94,13 +89,12 @@ def train(
         sublinear_tf=True,
         stop_words="english",
     )
-    X_sparse: Any = vectorizer.fit_transform(texts)
-    X = X_sparse.toarray()
+    X = vectorizer.fit_transform(texts)
 
-    interest_model = BayesianRidge()
+    interest_model = Ridge()
     interest_model.fit(X, interest_targets)
 
-    fit_model = BayesianRidge()
+    fit_model = Ridge()
     fit_model.fit(X, fit_targets)
 
     return vectorizer, interest_model, fit_model
@@ -108,100 +102,49 @@ def train(
 
 def predict(
     vectorizer: TfidfVectorizer,
-    interest_model: BayesianRidge,
-    fit_model: BayesianRidge,
+    interest_model: Ridge,
+    fit_model: Ridge,
     jobs: list[Job],
-) -> list[tuple[Job, float, float, float, float]]:
+) -> list[tuple[Job, float, float, float]]:
     """Predict interest + fit for jobs.
 
-    Returns (job, combined, interest, fit, uncertainty)
+    Returns (job, combined, interest, fit)
     sorted descending by combined score.
     """
     if not jobs:
         return []
     texts = [job_text(j) for j in jobs]
-    X_sparse: Any = vectorizer.transform(texts)
-    X = X_sparse.toarray()
+    X = vectorizer.transform(texts)
 
-    i_pred: Any = interest_model.predict(
-        X, return_std=True
-    )
-    i_mean, i_std = i_pred
-    f_pred: Any = fit_model.predict(
-        X, return_std=True
-    )
-    f_mean, f_std = f_pred
+    i_pred = interest_model.predict(X)
+    f_pred = fit_model.predict(X)
 
     results = []
     for idx, job in enumerate(jobs):
-        im = float(i_mean[idx])
-        fs = float(f_mean[idx])
+        im = float(i_pred[idx])
+        fs = float(f_pred[idx])
         combined = (max(im, 0) * max(fs, 0)) ** 0.5
-        unc = float(i_std[idx] + f_std[idx]) / 2
-        results.append((job, combined, im, fs, unc))
+        results.append((job, combined, im, fs))
 
     results.sort(key=lambda x: x[1], reverse=True)
     return results
 
 
-# -- Selection (active learning) --
+# -- Exploration --
 
 
-def select_for_scoring(
-    ranked: list[tuple[Job, float, float, float, float]],
+def select_explore(
+    ranked: list[tuple[Job, float, float, float]],
+    top_k: int,
     budget: int,
-    explore_frac: float = 0.1,
-    uncertain_frac: float = 0.1,
 ) -> list[Job]:
-    """Select jobs for LLM scoring: exploit + explore.
-
-    Allocates budget across three strategies:
-    - exploit: top by predicted combined score
-    - explore: uniform random from remaining
-    - uncertain: highest uncertainty from remaining
-    """
-    if not ranked or budget <= 0:
+    """Random sample from jobs outside top-k."""
+    remaining = ranked[top_k:]
+    if not remaining or budget <= 0:
         return []
-
-    n_exploit = max(
-        1,
-        budget
-        - int(budget * explore_frac)
-        - int(budget * uncertain_frac),
-    )
-    n_explore = int(budget * explore_frac)
-    n_uncertain = budget - n_exploit - n_explore
-
-    # Exploit: top-k by combined score
-    exploit = [j for j, *_ in ranked[:n_exploit]]
-    remaining = ranked[n_exploit:]
-
-    if not remaining:
-        return exploit
-
-    # Uncertain: highest uncertainty from remaining
-    by_unc = sorted(
-        remaining, key=lambda x: x[4], reverse=True
-    )
-    uncertain = [j for j, *_ in by_unc[:n_uncertain]]
-    uncertain_set = {j.hash for j in uncertain}
-
-    # Explore: random from remaining
-    rest = [
-        r for r in remaining if r[0].hash not in uncertain_set
-    ]
-    k = min(n_explore, len(rest))
-    explore = [r[0] for r in random.sample(rest, k)]
-
-    selected = exploit + uncertain + explore
-    logger.info(
-        "selection exploit=%d uncertain=%d explore=%d"
-        " total=%d",
-        len(exploit),
-        len(uncertain),
-        len(explore),
-        len(selected),
-    )
+    k = min(budget, len(remaining))
+    selected = [r[0] for r in random.sample(remaining, k)]
+    logger.info("explore sample=%d", len(selected))
     return selected
 
 
@@ -211,8 +154,8 @@ def select_for_scoring(
 def save(
     path: Path,
     vectorizer: TfidfVectorizer,
-    interest_model: BayesianRidge,
-    fit_model: BayesianRidge,
+    interest_model: Ridge,
+    fit_model: Ridge,
     training_data: list[TrainingRecord],
     cfg_hash: str,
 ) -> None:
@@ -245,8 +188,8 @@ def load(
 ) -> (
     tuple[
         TfidfVectorizer,
-        BayesianRidge,
-        BayesianRidge,
+        Ridge,
+        Ridge,
         list[TrainingRecord],
     ]
     | None
@@ -332,7 +275,7 @@ def sample(jobs: list[Job], n: int) -> list[Job]:
 
 
 def evaluate(
-    ranked: list[tuple[Job, float, float, float, float]],
+    ranked: list[tuple[Job, float, float, float]],
     interest_scores: dict,
     fit_scores: dict,
 ) -> None:
@@ -340,7 +283,7 @@ def evaluate(
     from scipy.stats import spearmanr
 
     pairs: list[tuple[float, float]] = []
-    for job, combined, _, _, _ in ranked:
+    for job, combined, _, _ in ranked:
         i = interest_scores.get(job.hash)
         f = fit_scores.get(job.hash)
         if i is not None and f is not None:
@@ -354,7 +297,8 @@ def evaluate(
 
     preds, actuals = zip(*pairs, strict=True)
     mae = sum(
-        abs(p - a) for p, a in zip(preds, actuals, strict=True)
+        abs(p - a)
+        for p, a in zip(preds, actuals, strict=True)
     ) / len(pairs)
     rho, _ = spearmanr(preds, actuals)
 
