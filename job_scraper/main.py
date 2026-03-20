@@ -23,19 +23,6 @@ from job_scraper.scraper._http import Http
 logger = logging.getLogger("job_scraper.main")
 app = typer.Typer()
 
-_PERCENTILES = (50, 75, 90, 95)
-
-
-def _format_distribution(scores: list[float]) -> str:
-    s = sorted(scores)
-    n = len(s)
-    parts = [f"total={n}"]
-    for k in _PERCENTILES:
-        idx = min(int(n * k / 100), n - 1)
-        parts.append(f"p{k}={s[idx]:.4f}")
-    parts.append(f"max={s[-1]:.4f}")
-    return " ".join(parts)
-
 
 def _load_jobs(path: Path) -> list[Job]:
     """Load Job objects from a JSONL file."""
@@ -309,8 +296,21 @@ async def _run(
     ) -> None:
         if not scores:
             return
+        s = sorted(scores)
+        n = len(s)
+        pcts = (50, 75, 90, 95)
+        vals = {
+            k: s[min(int(n * k / 100), n - 1)]
+            for k in pcts
+        }
         logger.info(
-            "%s %s", label, _format_distribution(scores)
+            "%s total=%d %s max=%.4f",
+            label,
+            n,
+            " ".join(
+                f"p{k}={v:.4f}" for k, v in vals.items()
+            ),
+            s[-1],
         )
 
     # --- Surrogate model ---
