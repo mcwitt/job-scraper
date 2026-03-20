@@ -23,6 +23,19 @@ from job_scraper.scraper._http import Http
 logger = logging.getLogger("job_scraper.main")
 app = typer.Typer()
 
+_PERCENTILES = (50, 75, 90, 95)
+
+
+def _format_distribution(scores: list[float]) -> str:
+    s = sorted(scores)
+    n = len(s)
+    parts = [f"total={n}"]
+    for k in _PERCENTILES:
+        idx = min(int(n * k / 100), n - 1)
+        parts.append(f"p{k}={s[idx]:.4f}")
+    parts.append(f"max={s[-1]:.4f}")
+    return " ".join(parts)
+
 
 def _load_jobs(path: Path) -> list[Job]:
     """Load Job objects from a JSONL file."""
@@ -296,22 +309,8 @@ async def _run(
     ) -> None:
         if not scores:
             return
-        s = sorted(scores)
-        n = len(s)
-
-        def pct(k: int) -> float:
-            return s[min(int(n * k / 100), n - 1)]
-
         logger.info(
-            "%s total=%d p50=%.4f p75=%.4f p90=%.4f"
-            " p95=%.4f max=%.4f",
-            label,
-            n,
-            pct(50),
-            pct(75),
-            pct(90),
-            pct(95),
-            s[-1],
+            "%s %s", label, _format_distribution(scores)
         )
 
     # --- Surrogate model ---
@@ -544,7 +543,7 @@ def run(
         typer.Option(
             help="Extra jobs to LLM-score for surrogate improvement"
         ),
-    ] = 50,
+    ] = 20,
     linkedin_dir: Annotated[
         Path, typer.Option(help="LinkedIn data directory")
     ] = Path("linkedin"),
