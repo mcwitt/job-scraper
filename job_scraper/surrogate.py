@@ -3,6 +3,7 @@ import json
 import logging
 import pickle
 import random
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
@@ -13,36 +14,45 @@ from job_scraper.models import Job
 
 logger = logging.getLogger(__name__)
 
+SCORE_PRECISION = 4
+
 
 # -- Training data --
 
 
-def _training_record(
-    job: Job,
-    interest: float,
-    fit: float,
-) -> dict:
-    """Build a training record with separate fields."""
-    return {
-        "title": job.title,
-        "company": job.company,
-        "team": job.team,
-        "location": job.location,
-        "description": job.description,
-        "interest": round(interest, 4),
-        "fit": round(fit, 4),
-    }
+@dataclass(frozen=True)
+class TrainingRecord:
+    title: str
+    company: str
+    description: str
+    interest: float
+    fit: float
+    team: str | None = None
+    location: str | None = None
 
+    @classmethod
+    def from_job(
+        cls, job: Job, interest: float, fit: float
+    ) -> "TrainingRecord":
+        return cls(
+            title=job.title,
+            company=job.company,
+            team=job.team,
+            location=job.location,
+            description=job.description,
+            interest=round(interest, SCORE_PRECISION),
+            fit=round(fit, SCORE_PRECISION),
+        )
 
-def _record_text(rec: dict) -> str:
-    """Concatenate fields for TF-IDF vectorization."""
-    parts = [rec["title"], rec["company"]]
-    if rec.get("team"):
-        parts.append(rec["team"])
-    if rec.get("location"):
-        parts.append(rec["location"])
-    parts.append(rec["description"])
-    return " ".join(parts)
+    def text(self) -> str:
+        """Concatenate fields for TF-IDF."""
+        parts = [self.title, self.company]
+        if self.team:
+            parts.append(self.team)
+        if self.location:
+            parts.append(self.location)
+        parts.append(self.description)
+        return " ".join(parts)
 
 
 def job_text(job: Job) -> str:
@@ -66,16 +76,16 @@ def config_hash(preferences: str, resume: str) -> str:
 
 
 def train(
-    records: list[dict],
+    records: list[TrainingRecord],
 ) -> tuple[
     TfidfVectorizer,
     BayesianRidge,
     BayesianRidge,
 ]:
     """Fit TF-IDF + BayesianRidge for interest and fit."""
-    texts = [_record_text(r) for r in records]
-    interest_targets = [r["interest"] for r in records]
-    fit_targets = [r["fit"] for r in records]
+    texts = [r.text() for r in records]
+    interest_targets = [r.interest for r in records]
+    fit_targets = [r.fit for r in records]
 
     vectorizer = TfidfVectorizer(
         ngram_range=(1, 2),
@@ -180,9 +190,8 @@ def select_for_scoring(
     rest = [
         r for r in remaining if r[0].hash not in uncertain_set
     ]
-    rng = random.Random(42)  # noqa: S311
     k = min(n_explore, len(rest))
-    explore = [r[0] for r in rng.sample(rest, k)]
+    explore = [r[0] for r in random.sample(rest, k)]
 
     selected = exploit + uncertain + explore
     logger.info(
@@ -204,7 +213,7 @@ def save(
     vectorizer: TfidfVectorizer,
     interest_model: BayesianRidge,
     fit_model: BayesianRidge,
-    training_data: list[dict],
+    training_data: list[TrainingRecord],
     cfg_hash: str,
 ) -> None:
     """Persist surrogate models + training data."""
@@ -215,7 +224,7 @@ def save(
         )
     with (path / "training_data.jsonl").open("w") as f:
         for entry in training_data:
-            f.write(json.dumps(entry) + "\n")
+            f.write(json.dumps(asdict(entry)) + "\n")
     with (path / "meta.json").open("w") as f:
         json.dump(
             {
@@ -238,7 +247,7 @@ def load(
         TfidfVectorizer,
         BayesianRidge,
         BayesianRidge,
-        list[dict],
+        list[TrainingRecord],
     ]
     | None
 ):
@@ -267,10 +276,12 @@ def load(
             pickle.load(f)  # noqa: S301
         )
 
-    training_data: list[dict] = []
+    training_data: list[TrainingRecord] = []
     with data_path.open() as f:
         for line in f:
-            training_data.append(json.loads(line))
+            training_data.append(
+                TrainingRecord(**json.loads(line))
+            )
 
     logger.info(
         "loaded surrogate n_samples=%d path=%s",
@@ -287,8 +298,8 @@ def augment_training_data(
     jobs: list[Job],
     interest_scores: dict,
     fit_scores: dict,
-    existing: list[dict],
-) -> list[dict]:
+    existing: list[TrainingRecord],
+) -> list[TrainingRecord]:
     """Merge new LLM scores into training data, dedup."""
     records = list(existing)
     for job in jobs:
@@ -296,7 +307,7 @@ def augment_training_data(
         f = fit_scores.get(job.hash)
         if i is not None and f is not None:
             records.append(
-                _training_record(
+                TrainingRecord.from_job(
                     job,
                     float(i["score"]),
                     float(f["score"]),
@@ -304,9 +315,9 @@ def augment_training_data(
             )
 
     # Dedup by text (keep latest)
-    seen: dict[str, dict] = {}
+    seen: dict[str, TrainingRecord] = {}
     for rec in records:
-        seen[_record_text(rec)] = rec
+        seen[rec.text()] = rec
     return list(seen.values())
 
 

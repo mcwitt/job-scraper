@@ -13,34 +13,12 @@ import dacite
 import httpx
 import typer
 
+from job_scraper import surrogate
 from job_scraper.cache import open_cache
 from job_scraper.models import Job, to_dict
 from job_scraper.relevance import parse_query, prefilter
 from job_scraper.scraper import ScrapeFn, discover
 from job_scraper.scraper._http import Http
-from job_scraper.surrogate import (
-    augment_training_data,
-    config_hash,
-    select_for_scoring,
-)
-from job_scraper.surrogate import (
-    evaluate as surrogate_evaluate,
-)
-from job_scraper.surrogate import (
-    load as surrogate_load,
-)
-from job_scraper.surrogate import (
-    predict as surrogate_predict,
-)
-from job_scraper.surrogate import (
-    sample as surrogate_sample,
-)
-from job_scraper.surrogate import (
-    save as surrogate_save,
-)
-from job_scraper.surrogate import (
-    train as surrogate_train,
-)
 
 logger = logging.getLogger("job_scraper.main")
 app = typer.Typer()
@@ -297,13 +275,14 @@ async def _run(
         with sur_path.open("w") as f:
             for job, combined, im, fm, unc in ranked:
                 d = to_dict(job)
+                p = surrogate.SCORE_PRECISION
                 d["surrogate_combined"] = round(
-                    combined, 4
+                    combined, p
                 )
-                d["surrogate_interest"] = round(im, 4)
-                d["surrogate_fit"] = round(fm, 4)
+                d["surrogate_interest"] = round(im, p)
+                d["surrogate_fit"] = round(fm, p)
                 d["surrogate_uncertainty"] = round(
-                    unc, 4
+                    unc, p
                 )
                 f.write(json.dumps(d) + "\n")
         logger.info(
@@ -336,16 +315,16 @@ async def _run(
         )
 
     # --- Surrogate model ---
-    cfg_hash = config_hash(preferences_text, resume_text)
+    cfg_hash = surrogate.config_hash(preferences_text, resume_text)
     surrogate_dir = cache_dir / "surrogate"
-    loaded = surrogate_load(surrogate_dir, cfg_hash)
+    loaded = surrogate.load(surrogate_dir, cfg_hash)
 
     if loaded is not None:
         # -- Warm start --
         vec, i_model, f_model, training_data = loaded
         logger.info("surrogate warm start")
 
-        ranked = surrogate_predict(
+        ranked = surrogate.predict(
             vec, i_model, f_model, filtered
         )
         _log_distribution(
@@ -371,7 +350,7 @@ async def _run(
         top_jobs = [j for j, *_ in ranked[:top_k]]
 
         # Exploration jobs: for surrogate improvement
-        explore_jobs = select_for_scoring(
+        explore_jobs = surrogate.select_for_scoring(
             ranked[top_k:], explore_budget
         )
         all_to_score = top_jobs + explore_jobs
@@ -386,20 +365,20 @@ async def _run(
             all_to_score
         )
 
-        surrogate_evaluate(
+        surrogate.evaluate(
             ranked, interest_scores, fit_scores
         )
 
-        training_data = augment_training_data(
+        training_data = surrogate.augment_training_data(
             all_to_score,
             interest_scores,
             fit_scores,
             training_data,
         )
-        vec, i_model, f_model = surrogate_train(
+        vec, i_model, f_model = surrogate.train(
             training_data
         )
-        surrogate_save(
+        surrogate.save(
             surrogate_dir,
             vec,
             i_model,
@@ -425,7 +404,7 @@ async def _run(
             )
             return
 
-        bootstrap = surrogate_sample(filtered, 500)
+        bootstrap = surrogate.sample(filtered, 500)
         logger.info(
             "bootstrap sample=%d total=%d",
             len(bootstrap),
@@ -436,7 +415,7 @@ async def _run(
             bootstrap
         )
 
-        training_data = augment_training_data(
+        training_data = surrogate.augment_training_data(
             bootstrap, interest_scores, fit_scores, []
         )
         logger.info(
@@ -444,11 +423,11 @@ async def _run(
             len(training_data),
         )
 
-        vec, i_model, f_model = surrogate_train(
+        vec, i_model, f_model = surrogate.train(
             training_data
         )
 
-        ranked = surrogate_predict(
+        ranked = surrogate.predict(
             vec, i_model, f_model, filtered
         )
         _log_distribution(
@@ -462,20 +441,20 @@ async def _run(
         interest_scores.update(i_topk)
         fit_scores.update(f_topk)
 
-        surrogate_evaluate(
+        surrogate.evaluate(
             ranked, interest_scores, fit_scores
         )
 
-        training_data = augment_training_data(
+        training_data = surrogate.augment_training_data(
             top_jobs,
             interest_scores,
             fit_scores,
             training_data,
         )
-        vec, i_model, f_model = surrogate_train(
+        vec, i_model, f_model = surrogate.train(
             training_data
         )
-        surrogate_save(
+        surrogate.save(
             surrogate_dir,
             vec,
             i_model,
