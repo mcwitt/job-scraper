@@ -175,6 +175,7 @@ async def _run(
     report: bool,
     keywords_path: Path,
     top_k: int,
+    explore_budget: int,
     linkedin_dir: Path,
     dedup_fields: tuple[str, ...],
     resume_path: Path,
@@ -366,9 +367,23 @@ async def _run(
             )
             return
 
-        to_score = select_for_scoring(ranked, top_k)
+        # Report jobs: top-k by surrogate prediction
+        top_jobs = [j for j, *_ in ranked[:top_k]]
+
+        # Exploration jobs: for surrogate improvement
+        explore_jobs = select_for_scoring(
+            ranked[top_k:], explore_budget
+        )
+        all_to_score = top_jobs + explore_jobs
+        logger.info(
+            "scoring report=%d explore=%d total=%d",
+            len(top_jobs),
+            len(explore_jobs),
+            len(all_to_score),
+        )
+
         interest_scores, fit_scores = await _llm_score(
-            to_score
+            all_to_score
         )
 
         surrogate_evaluate(
@@ -376,7 +391,7 @@ async def _run(
         )
 
         training_data = augment_training_data(
-            to_score,
+            all_to_score,
             interest_scores,
             fit_scores,
             training_data,
@@ -392,8 +407,6 @@ async def _run(
             training_data,
             cfg_hash,
         )
-
-        top_jobs = to_score
 
     else:
         # -- Cold start --
@@ -443,22 +456,18 @@ async def _run(
         )
         _write_surrogate_jsonl(ranked)
 
-        # Score top-k (cache skips already-scored)
-        top_jobs_candidates = [
-            j for j, *_ in ranked[:top_k]
-        ]
-        i_scores_topk, f_scores_topk = await _llm_score(
-            top_jobs_candidates
-        )
-        interest_scores.update(i_scores_topk)
-        fit_scores.update(f_scores_topk)
+        # Score top-k for report (cache skips bootstrap)
+        top_jobs = [j for j, *_ in ranked[:top_k]]
+        i_topk, f_topk = await _llm_score(top_jobs)
+        interest_scores.update(i_topk)
+        fit_scores.update(f_topk)
 
         surrogate_evaluate(
             ranked, interest_scores, fit_scores
         )
 
         training_data = augment_training_data(
-            top_jobs_candidates,
+            top_jobs,
             interest_scores,
             fit_scores,
             training_data,
@@ -474,8 +483,6 @@ async def _run(
             training_data,
             cfg_hash,
         )
-
-        top_jobs = top_jobs_candidates
 
     # --- Merge into ScoredJob objects ---
     scored = []
@@ -551,8 +558,14 @@ def run(
     ),
     top_k: Annotated[
         int,
-        typer.Option(help="Keep at most K jobs by relevance"),
+        typer.Option(help="Score and report top K jobs"),
     ] = 100,
+    explore_budget: Annotated[
+        int,
+        typer.Option(
+            help="Extra jobs to LLM-score for surrogate improvement"
+        ),
+    ] = 50,
     linkedin_dir: Annotated[
         Path, typer.Option(help="LinkedIn data directory")
     ] = Path("linkedin"),
@@ -637,6 +650,7 @@ def run(
             report=report,
             keywords_path=keywords,
             top_k=top_k,
+            explore_budget=explore_budget,
             linkedin_dir=linkedin_dir,
             dedup_fields=fields,
             resume_path=resume,
