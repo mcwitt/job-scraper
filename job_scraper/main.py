@@ -2,11 +2,14 @@ import asyncio
 import dataclasses
 import json
 import logging
+import random
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
 if TYPE_CHECKING:
+    import anthropic
+
     from job_scraper.status import SourceStatus
 
 import dacite
@@ -15,7 +18,7 @@ import typer
 
 from job_scraper.cache import open_cache
 from job_scraper.models import Job, to_dict
-from job_scraper.relevance import parse_query, score_relevance
+from job_scraper.relevance import filter_relevant, parse_query
 from job_scraper.scraper import ScrapeFn, discover
 from job_scraper.scraper.http import Http
 
@@ -31,6 +34,27 @@ def _load_jobs(path: Path) -> list[Job]:
             jobs.append(dacite.from_dict(Job, json.loads(line)))
     logger.info("loaded jobs count=%d path=%s", len(jobs), path)
     return jobs
+
+
+def _dedup(
+    jobs: list[Job], fields: tuple[str, ...]
+) -> list[Job]:
+    if not fields:
+        return jobs
+    seen: set[tuple[str | None, ...]] = set()
+    result: list[Job] = []
+    for job in jobs:
+        key = tuple(getattr(job, f) for f in fields)
+        if key not in seen:
+            seen.add(key)
+            result.append(job)
+    logger.info(
+        "dedup total=%d unique=%d fields=%s",
+        len(jobs),
+        len(result),
+        ",".join(fields),
+    )
+    return result
 
 
 async def _scrape(
@@ -140,6 +164,50 @@ async def _scrape(
     return all_jobs, statuses
 
 
+async def _score_jobs(
+    jobs: list[Job],
+    preferences_text: str,
+    resume_text: str,
+    ai: "anthropic.AsyncAnthropic",
+    model: str,
+    interest_cache: tuple,
+    fit_cache: tuple,
+    companies: dict[str, str],
+    max_concurrent_api: int,
+) -> dict[str, dict]:
+    """Score jobs via LLM, return {hash: {interest: ..., fit: ...}}."""
+    from job_scraper.scorer import score_fit, score_interest
+
+    interest_scores, fit_scores = await asyncio.gather(
+        score_interest(
+            jobs,
+            preferences_text,
+            ai,
+            model,
+            interest_cache,
+            companies=companies,
+            max_concurrent=max_concurrent_api,
+        ),
+        score_fit(
+            jobs,
+            resume_text,
+            ai,
+            model,
+            fit_cache,
+            companies=companies,
+            max_concurrent=max_concurrent_api,
+        ),
+    )
+
+    results: dict[str, dict] = {}
+    for job in jobs:
+        i = interest_scores.get(job.hash)
+        f = fit_scores.get(job.hash)
+        if i is not None and f is not None:
+            results[job.hash] = {"interest": i, "fit": f}
+    return results
+
+
 async def _run(
     cache_dir: Path,
     output_dir: Path,
@@ -155,6 +223,8 @@ async def _run(
     linkedin_dir: Path,
     dedup_fields: tuple[str, ...],
     resume_path: Path,
+    num_cold_start: int,
+    num_explore: int,
     scrape_only: bool = False,
     input_jobs: Path | None = None,
     status_report: bool = False,
@@ -184,152 +254,197 @@ async def _run(
         logger.warning("no jobs to process")
         return
 
-    score_cache_path = cache_dir / "score_interest.jsonl"
     output_path = output_dir / "jobs.jsonl"
 
-    # FTS5 relevance scoring
-    queries = parse_query(keywords_path.read_text())
-    scored_rel = score_relevance(queries, all_jobs)
+    # --- Dedup (before filtering) ---
+    all_jobs = _dedup(all_jobs, dedup_fields)
 
-    # Write all jobs with relevance + per-group breakdown
-    rel_path = output_dir / "jobs_relevance.jsonl"
-    with rel_path.open("w") as f:
-        for job, rel, groups in scored_rel:
-            d = to_dict(job)
-            d["relevance"] = round(rel, 4)
-            d["relevance_groups"] = {
-                str(k): round(v, 4)
-                for k, v in sorted(groups.items())
-            }
-            f.write(json.dumps(d) + "\n")
+    # --- Keywords boolean filter ---
+    query = parse_query(keywords_path.read_text())
+    filtered_jobs = filter_relevant(query, all_jobs)
     logger.info(
-        "wrote relevance scores count=%d path=%s",
-        len(scored_rel),
-        rel_path,
+        "keyword filter total=%d matched=%d",
+        len(all_jobs),
+        len(filtered_jobs),
     )
 
-    # Relevance distribution summary
-    all_scores = [rel for _, rel, _ in scored_rel]
-    if all_scores:
-        all_scores_sorted = sorted(all_scores)
-        n = len(all_scores_sorted)
-
-        def _percentile(k: int) -> float:
-            idx = min(int(n * k / 100), n - 1)
-            return all_scores_sorted[idx]
-
-        nonzero = sum(
-            1 for s in all_scores_sorted if s > 0
-        )
-        logger.info(
-            "relevance total=%d nonzero=%d top_k=%d"
-            " p50=%.4f p75=%.4f p90=%.4f p95=%.4f"
-            " max=%.4f",
-            n,
-            nonzero,
-            top_k,
-            _percentile(50),
-            _percentile(75),
-            _percentile(90),
-            _percentile(95),
-            all_scores_sorted[-1],
-        )
-
-    # Deduplicate by selected fields (before top-k truncation)
-    passing = scored_rel
-    if dedup_fields:
-        seen: dict[tuple[str | None, ...], int] = {}
-        deduped: list[tuple[Job, float, dict[int, float]]] = (
-            []
-        )
-        for job, rel, groups in passing:
-            key = tuple(getattr(job, f) for f in dedup_fields)
-            if key not in seen:
-                seen[key] = len(deduped)
-                deduped.append((job, rel, groups))
-        logger.info(
-            "dedup unique=%d fields=%s",
-            len(deduped),
-            ",".join(dedup_fields),
-        )
-        passing = deduped
-
-    passing = passing[:top_k]
-    if passing:
-        cutoff = passing[-1][1]
-        logger.info(
-            "top_k cutoff=%d score=%.4f", top_k, cutoff
-        )
-    unique_jobs = [j for j, _, _ in passing]
-
     if skip_score:
-        # Write unsorted jobs
         with output_path.open("w") as f:
-            for job in unique_jobs:
+            for job in filtered_jobs:
                 f.write(json.dumps(to_dict(job)) + "\n")
         logger.info(
-            "wrote jobs count=%d path=%s", len(unique_jobs), output_path
+            "wrote jobs count=%d path=%s",
+            len(filtered_jobs),
+            output_path,
         )
         return
 
-    # Score
-    preferences_text = preferences_path.read_text()
-    if not preferences_text.strip():
-        logger.warning("preferences is empty path=%s", preferences_path)
-
+    # --- Surrogate-guided scoring ---
     import anthropic
 
     from job_scraper.companies import load_companies
     from job_scraper.models import Fit, Interest, ScoredJob
-    from job_scraper.scorer import (
-        score_fit,
-        score_interest,
+    from job_scraper.surrogate import (
+        append_examples,
+        job_to_example,
+        load_examples,
+        predict,
+        train,
     )
 
-    companies = load_companies()
-
-    fit_cache_path = cache_dir / "score_fit.jsonl"
-    ai = anthropic.AsyncAnthropic()
+    preferences_text = preferences_path.read_text()
+    if not preferences_text.strip():
+        logger.warning(
+            "preferences is empty path=%s", preferences_path
+        )
 
     resume_text = resume_path.read_text()
+    companies = load_companies()
+    ai = anthropic.AsyncAnthropic()
+
+    def _to_examples(
+        jobs: list[Job],
+        results: dict[str, dict],
+        exclude: set[str] | None = None,
+    ) -> list:
+        return [
+            job_to_example(
+                job,
+                results[job.hash]["interest"]["score"],
+                results[job.hash]["fit"]["score"],
+            )
+            for job in jobs
+            if job.hash in results
+            and (exclude is None or job.hash not in exclude)
+        ]
+
+    training_path = cache_dir / "surrogate_training.jsonl"
+    examples = load_examples(training_path)
+    scored_hashes = {ex.hash for ex in examples}
+
+    # Partition into already-scored and unscored
+    unscored = [
+        j for j in filtered_jobs if j.hash not in scored_hashes
+    ]
+    cold_start = len(examples) == 0
+
+    if cold_start:
+        explore_sample = random.sample(
+            unscored, min(num_cold_start, len(unscored))
+        )
+        logger.info(
+            "cold start: sampling %d jobs for initial training",
+            len(explore_sample),
+        )
+    else:
+        explore_sample = random.sample(
+            unscored, min(num_explore, len(unscored))
+        )
+        logger.info(
+            "warm start: sampling %d explore jobs",
+            len(explore_sample),
+        )
+
+    score_cache_path = cache_dir / "score_interest.jsonl"
+    fit_cache_path = cache_dir / "score_fit.jsonl"
 
     async with (
         open_cache(score_cache_path) as interest_cache,
         open_cache(fit_cache_path) as fit_cache,
     ):
-        interest_scores, fit_scores = await asyncio.gather(
-            score_interest(
-                unique_jobs,
+        # Score explore batch
+        if explore_sample:
+            explore_results = await _score_jobs(
+                explore_sample,
                 preferences_text,
-                ai,
-                model,
-                interest_cache,
-                companies=companies,
-                max_concurrent=max_concurrent_api,
-            ),
-            score_fit(
-                unique_jobs,
                 resume_text,
                 ai,
                 model,
+                interest_cache,
                 fit_cache,
-                companies=companies,
-                max_concurrent=max_concurrent_api,
-            ),
+                companies,
+                max_concurrent_api,
+            )
+            new_examples = _to_examples(
+                explore_sample, explore_results
+            )
+            append_examples(training_path, new_examples)
+            examples = examples + new_examples
+            scored_hashes.update(ex.hash for ex in new_examples)
+            logger.info(
+                "explore scored=%d total_training=%d",
+                len(new_examples),
+                len(examples),
+            )
+
+        # Train surrogate and rank
+        surrogate = train(examples)
+
+        surrogate_scores = predict(surrogate, filtered_jobs)
+        surrogate_path = output_dir / "jobs_surrogate.jsonl"
+        with surrogate_path.open("w") as f:
+            for job, s in zip(
+                filtered_jobs, surrogate_scores, strict=True
+            ):
+                d = to_dict(job)
+                d["surrogate_score"] = round(s, 6)
+                f.write(json.dumps(d) + "\n")
+        logger.info(
+            "wrote surrogate scores count=%d path=%s",
+            len(filtered_jobs),
+            surrogate_path,
         )
+
+        # Rank and take top-k
+        ranked = sorted(
+            zip(filtered_jobs, surrogate_scores, strict=True),
+            key=lambda x: x[1],
+            reverse=True,
+        )
+        top_jobs = [j for j, _ in ranked[:top_k]]
+        if ranked:
+            logger.info(
+                "surrogate top_k=%d best=%.4f cutoff=%.4f",
+                top_k,
+                ranked[0][1],
+                ranked[min(top_k, len(ranked)) - 1][1],
+            )
+
+        # Score top-k (cache hits for already-scored explore jobs)
+        topk_results = await _score_jobs(
+            top_jobs,
+            preferences_text,
+            resume_text,
+            ai,
+            model,
+            interest_cache,
+            fit_cache,
+            companies,
+            max_concurrent_api,
+        )
+
+        # Append newly scored (not in explore batch) to training data
+        newly_scored = _to_examples(
+            top_jobs, topk_results, exclude=scored_hashes
+        )
+        if newly_scored:
+            append_examples(training_path, newly_scored)
+            logger.info(
+                "appended top-k training examples count=%d",
+                len(newly_scored),
+            )
 
     # Merge into ScoredJob objects
     scored = []
-    for job in unique_jobs:
-        interest_data = interest_scores.get(job.hash)
-        fit_data = fit_scores.get(job.hash)
-        if interest_data is None or fit_data is None:
+    for job in top_jobs:
+        data = topk_results.get(job.hash)
+        if data is None:
             continue
         scored.append(
             ScoredJob(
                 **to_dict(job),
-                score_interest=Interest(**interest_data),
-                score_fit=Fit(**fit_data),
+                score_interest=Interest(**data["interest"]),
+                score_fit=Fit(**data["fit"]),
             )
         )
 
@@ -342,7 +457,11 @@ async def _run(
     with output_path.open("w") as f:
         for job in scored:
             f.write(json.dumps(to_dict(job)) + "\n")
-    logger.info("wrote scored jobs count=%d path=%s", len(scored), output_path)
+    logger.info(
+        "wrote scored jobs count=%d path=%s",
+        len(scored),
+        output_path,
+    )
 
     if report:
         from job_scraper.linkedin import load as load_linkedin
@@ -384,13 +503,13 @@ def run(
     report: Annotated[
         bool, typer.Option("--report", help="Generate HTML report")
     ] = False,
-    keywords: Annotated[Path, typer.Option(help="Path to keywords file")] = Path(
-        "keywords"
-    ),
+    keywords: Annotated[
+        Path, typer.Option(help="Path to keywords file")
+    ] = Path("keywords"),
     top_k: Annotated[
         int,
-        typer.Option(help="Keep at most K jobs by relevance"),
-    ] = 100,
+        typer.Option(help="Keep at most K jobs for LLM scoring"),
+    ] = 200,
     linkedin_dir: Annotated[
         Path, typer.Option(help="LinkedIn data directory")
     ] = Path("linkedin"),
@@ -403,16 +522,22 @@ def run(
     ] = "title,company,team,description",
     scrape_only: Annotated[
         bool,
-        typer.Option("--scrape-only", help="Scrape only, write jobs_raw.jsonl"),
+        typer.Option(
+            "--scrape-only",
+            help="Scrape only, write jobs_raw.jsonl",
+        ),
     ] = False,
     input_jobs: Annotated[
         Path | None,
-        typer.Option(help="Skip scrape, read raw jobs from JSONL file"),
+        typer.Option(
+            help="Skip scrape, read raw jobs from JSONL file"
+        ),
     ] = None,
     status_report: Annotated[
         bool,
         typer.Option(
-            "--status-report", help="Generate scraper status HTML report"
+            "--status-report",
+            help="Generate scraper status HTML report",
         ),
     ] = False,
     only: Annotated[
@@ -423,8 +548,22 @@ def run(
     ] = None,
     exclude: Annotated[
         str | None,
-        typer.Option(help="Comma-separated scraper names to exclude"),
+        typer.Option(
+            help="Comma-separated scraper names to exclude"
+        ),
     ] = None,
+    num_cold_start: Annotated[
+        int,
+        typer.Option(
+            help="Jobs to sample for initial surrogate training"
+        ),
+    ] = 200,
+    num_explore: Annotated[
+        int,
+        typer.Option(
+            help="Unscored jobs to explore each warm-start run"
+        ),
+    ] = 20,
 ) -> None:
     """Scrape and score job postings."""
     if scrape_only and input_jobs is not None:
@@ -436,10 +575,14 @@ def run(
             "--only and --exclude are mutually exclusive"
         )
     only_set: frozenset[str] | None = (
-        frozenset(s.strip() for s in only.split(",")) if only else None
+        frozenset(s.strip() for s in only.split(","))
+        if only
+        else None
     )
     exclude_set: frozenset[str] | None = (
-        frozenset(s.strip() for s in exclude.split(",")) if exclude else None
+        frozenset(s.strip() for s in exclude.split(","))
+        if exclude
+        else None
     )
     names_to_check = only_set or exclude_set
     if names_to_check:
@@ -483,6 +626,8 @@ def run(
             status_report=status_report,
             only=only_set,
             exclude=exclude_set,
+            num_cold_start=num_cold_start,
+            num_explore=num_explore,
         )
     )
 

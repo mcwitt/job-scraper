@@ -64,6 +64,8 @@ let
                 "--top-k ${toString s.topK}"
                 "--dedup-fields ${s.dedupFields}"
                 "--max-concurrent-api ${toString s.maxConcurrentApi}"
+                "--num-cold-start ${toString s.numColdStart}"
+                "--num-explore ${toString s.numExplore}"
               ]
               ++ lib.optional (
                 ucfg.linkedinConnectionsDir != null
@@ -139,13 +141,23 @@ in
       };
       topK = mkOption {
         type = types.int;
-        default = 100;
-        description = "Keep at most K jobs by relevance.";
+        default = 200;
+        description = "Keep at most K jobs for LLM scoring.";
       };
       dedupFields = mkOption {
         type = types.str;
         default = "title,company,team,description";
         description = "Comma-separated Job fields for deduplication.";
+      };
+      numColdStart = mkOption {
+        type = types.int;
+        default = 200;
+        description = "Jobs to sample for initial surrogate training.";
+      };
+      numExplore = mkOption {
+        type = types.int;
+        default = 20;
+        description = "Unscored jobs to explore each warm-start run.";
       };
     };
 
@@ -184,7 +196,7 @@ in
               };
               keywords = mkOption {
                 type = types.str;
-                description = "FTS5 query content for relevance filtering.";
+                description = "FTS5 query expression for boolean pre-filtering.";
               };
               linkedinConnectionsDir = mkOption {
                 type = types.nullOr types.path;

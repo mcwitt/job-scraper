@@ -1,5 +1,5 @@
 # FTS5 query syntax: "phrases", AND/OR/NOT, (grouping)
-# Lines within a group are concatenated; --- separates groups (score = max across groups)
+# All non-comment lines are concatenated into a single FTS5 expression.
 #
 # Column filters: prefix a term with title: or description: to restrict
 # matching to that column. Useful for:
@@ -18,19 +18,7 @@
 #     "distributed systems"        often in descriptions, not titles
 #     CUDA OR TPU                  technology terms in body text
 
-# Group 1: Backend / Platform
-(title:"software engineer" OR title:"backend engineer" OR title:"platform engineer")
-NOT title:intern NOT title:internship NOT title:manager NOT title:director
----
-# Group 2: Infrastructure
-("distributed systems" OR microservices OR "API design")
-AND ("cloud infrastructure" OR Kubernetes OR "site reliability")
-NOT title:intern NOT title:internship NOT title:manager NOT title:director
----
-# Group 3: Languages
-(Python OR Go OR Java OR PostgreSQL OR Redis OR Kafka)
-NOT title:intern NOT title:internship NOT title:manager NOT title:director
----
-# Group 4: ML/AI
-("machine learning" OR "ML engineering" OR "model deployment" OR PyTorch)
+(title:"software engineer" OR title:"backend engineer" OR title:"platform engineer"
+OR title:"infrastructure engineer" OR title:"ML engineer"
+OR title:"machine learning engineer" OR title:"research scientist")
 NOT title:intern NOT title:internship NOT title:manager NOT title:director

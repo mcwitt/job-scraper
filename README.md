@@ -53,16 +53,16 @@ nix develop    # or use direnv
 ## Usage
 
 ```bash
-# Scrape + FTS5 relevance filter only (no LLM scoring)
+# Scrape + keyword filter only (no LLM scoring)
 python -m job_scraper.main --skip-score
 
-# Full pipeline: scrape + filter + score + report
+# Full pipeline: scrape + filter + surrogate rank + score + report
 python -m job_scraper.main --report
 
-# Customize scoring model and batch size
-python -m job_scraper.main --model claude-haiku-4-5-20251001 --batch-size 20
+# Customize scoring model
+python -m job_scraper.main --model claude-haiku-4-5-20251001
 
-# Keep only the top 50 jobs by relevance (default: 100)
+# Keep only the top 50 jobs for LLM scoring (default: 200)
 python -m job_scraper.main --top-k 50
 
 # Limit concurrent Claude API requests (default: 10)
@@ -78,13 +78,13 @@ python -m job_scraper.main --exclude salesforce,crowdstrike
 
 Output goes to `data/output/` by default:
 - `jobs_raw.jsonl` — all scraped jobs before filtering
-- `jobs_relevance.jsonl` — all jobs with FTS5 relevance scores
+- `jobs_surrogate.jsonl` — all filtered jobs with surrogate scores
 - `jobs.jsonl` — final ranked output
 - `report.html` — interactive HTML report (with `--report`)
 
 ## Architecture
 
-**Pipeline:** scrape → FTS5 relevance filter → dedupe → LLM score → sort → output
+**Pipeline:** scrape → dedupe → keywords boolean filter → surrogate ranking → LLM score top-k → sort → output
 
 ### Scraper discovery
 
@@ -95,8 +95,9 @@ Every `.py` file in `job_scraper/scraper/` whose name does not start with `_` is
 | Module | Purpose |
 |--------|---------|
 | `job_scraper/main.py` | CLI (Typer) and pipeline orchestration |
-| `job_scraper/relevance.py` | FTS5 relevance scoring against `keywords` |
-| `job_scraper/scorer.py` | Claude scoring with extended thinking |
+| `job_scraper/relevance.py` | FTS5 boolean filtering against `keywords` |
+| `job_scraper/surrogate.py` | TF-IDF + Ridge surrogate trained on LLM scores |
+| `job_scraper/scorer.py` | Claude scoring with prompt caching and structured output |
 | `job_scraper/cache.py` | JSONL append-log cache with TTL |
 | `job_scraper/models.py` | `Job` / `ScoredJob` frozen dataclasses |
 | `job_scraper/report.py` | Interactive HTML report (Jinja2) |
@@ -133,11 +134,11 @@ async def scrape(http: Http) -> AsyncIterator[Job]:
 
 All personal config files are gitignored. Copy from `*.example.*` to get started.
 
-### `keywords` — relevance prefilter
+### `keywords` — boolean prefilter
 
-Used in the **FTS5 relevance filter** step to cheaply discard irrelevant jobs before LLM scoring. This is a SQLite FTS5 query file — jobs that don't match any group are filtered out entirely, so the LLM only sees jobs that passed at least one keyword group.
+Used in the **keyword filter** step to cheaply discard irrelevant jobs before surrogate ranking and LLM scoring. This is a single SQLite FTS5 query expression — jobs that don't match are filtered out entirely.
 
-Syntax: `"phrases"`, `AND`/`OR`/`NOT`, `(grouping)`. Groups are separated by `---`; a job's relevance score is the max across all groups. Prefix terms with `title:` or `description:` to restrict matching to that column.
+Syntax: `"phrases"`, `AND`/`OR`/`NOT`, `(grouping)`. Prefix terms with `title:` or `description:` to restrict matching to that column.
 
 See `keywords.example` for a full example.
 
@@ -173,7 +174,7 @@ Add the flake as an input and import the module:
 
             settings = {
               model = "claude-haiku-4-5-20251001";
-              topK = 100;
+              topK = 200;
             };
 
             users.alice = {

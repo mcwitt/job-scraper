@@ -79,6 +79,7 @@
               jinja2
               lxml
               mistune
+              scikit-learn
               typer
             ];
           };
