@@ -3,8 +3,12 @@ import logging
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+import numpy as np
+from scipy.sparse import spmatrix
+from scipy.stats import spearmanr
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import Ridge
+from sklearn.model_selection import cross_val_predict
 
 from job_scraper.models import Job
 
@@ -82,14 +86,63 @@ def _text(obj: Job | Example) -> str:
     return " ".join(parts)
 
 
+@dataclass(frozen=True)
+class Metrics:
+    n_examples: int
+    cv_r2: float
+    cv_mae: float
+    cv_spearman: float
+
+
+def _evaluate(
+    X: spmatrix, targets: np.ndarray
+) -> Metrics:
+    """Cross-validated evaluation on pre-computed features."""
+    n = len(targets)
+    if n < 2:
+        logger.warning("too few examples for CV: %d", n)
+        return Metrics(
+            n_examples=n,
+            cv_r2=0.0,
+            cv_mae=0.0,
+            cv_spearman=0.0,
+        )
+
+    n_folds = min(5, n)
+    preds = cross_val_predict(
+        Ridge(alpha=1.0), X, targets, cv=n_folds
+    )
+
+    ss_res = float(np.sum((targets - preds) ** 2))
+    ss_tot = float(np.sum((targets - targets.mean()) ** 2))
+    r2 = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
+    mae = float(np.mean(np.abs(targets - preds)))
+    rho = float(spearmanr(targets, preds).statistic)
+
+    metrics = Metrics(
+        n_examples=n,
+        cv_r2=round(r2, 4),
+        cv_mae=round(mae, 4),
+        cv_spearman=round(rho, 4),
+    )
+    logger.info(
+        "surrogate CV n=%d r2=%.4f mae=%.4f spearman=%.4f",
+        metrics.n_examples,
+        metrics.cv_r2,
+        metrics.cv_mae,
+        metrics.cv_spearman,
+    )
+    return metrics
+
+
 def train(
     examples: list[Example],
-) -> tuple[TfidfVectorizer, Ridge]:
+) -> tuple[TfidfVectorizer, Ridge, Metrics]:
     texts = [_text(ex) for ex in examples]
-    targets = [
+    targets = np.array([
         ex.interest_score * ex.fit_score
         for ex in examples
-    ]
+    ])
     vectorizer = TfidfVectorizer(
         max_features=5000, stop_words="english"
     )
@@ -101,7 +154,17 @@ def train(
         len(examples),
         len(vectorizer.get_feature_names_out()),
     )
-    return vectorizer, model
+    metrics = _evaluate(X, targets)
+    return vectorizer, model, metrics
+
+
+def rank_agreement(
+    actual: list[float], predicted: list[float]
+) -> float | None:
+    """Spearman rank correlation, or None if too few pairs."""
+    if len(actual) < 3:
+        return None
+    return round(float(spearmanr(actual, predicted).statistic), 4)
 
 
 def predict(

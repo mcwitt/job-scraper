@@ -291,6 +291,7 @@ async def _run(
         job_to_example,
         load_examples,
         predict,
+        rank_agreement,
         train,
     )
 
@@ -380,9 +381,11 @@ async def _run(
             )
 
         # Train surrogate and rank
-        surrogate = train(examples)
+        vectorizer, ridge, cv_metrics = train(examples)
 
-        surrogate_scores = predict(surrogate, filtered_jobs)
+        surrogate_scores = predict(
+            (vectorizer, ridge), filtered_jobs
+        )
         surrogate_path = output_dir / "jobs_surrogate.jsonl"
         with surrogate_path.open("w") as f:
             for job, s in zip(
@@ -435,6 +438,65 @@ async def _run(
                 "appended top-k training examples count=%d",
                 len(newly_scored),
             )
+
+        # Top-k agreement: surrogate vs LLM on scored top-k jobs
+        surr_by_hash = {
+            j.hash: s
+            for j, s in zip(
+                filtered_jobs, surrogate_scores, strict=True
+            )
+        }
+        topk_surr, topk_actual = [], []
+        for job in top_jobs:
+            if data := topk_results.get(job.hash):
+                topk_surr.append(surr_by_hash[job.hash])
+                topk_actual.append(
+                    data["interest"]["score"]
+                    * data["fit"]["score"]
+                )
+
+        topk_spearman = rank_agreement(topk_actual, topk_surr)
+        if topk_spearman is not None:
+            logger.info(
+                "top-k agreement n=%d spearman=%.4f",
+                len(topk_surr),
+                topk_spearman,
+            )
+
+        # Explore surprises: jobs the surrogate underrated
+        if explore_sample:
+            for job in explore_sample:
+                data = explore_results.get(job.hash)
+                if data is None:
+                    continue
+                actual = (
+                    data["interest"]["score"]
+                    * data["fit"]["score"]
+                )
+                surr = surr_by_hash.get(job.hash)
+                if surr is not None and actual > 0.3 and surr < 0.1:
+                    logger.info(
+                        "surprise: %s @ %s actual=%.3f"
+                        " surrogate=%.3f",
+                        job.title,
+                        job.company,
+                        actual,
+                        surr,
+                    )
+
+        # Persist metrics
+        metrics_path = cache_dir / "surrogate_metrics.jsonl"
+        metrics_record = {
+            "timestamp": datetime.now(UTC).isoformat(),
+            **to_dict(cv_metrics),
+            "topk_spearman": topk_spearman,
+            "topk_n": len(topk_surr),
+        }
+        with metrics_path.open("a") as f:
+            f.write(json.dumps(metrics_record) + "\n")
+        logger.info(
+            "wrote surrogate metrics path=%s", metrics_path
+        )
 
     # Merge into ScoredJob objects
     scored = []
