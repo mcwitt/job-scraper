@@ -236,7 +236,7 @@ async def generate_fit_rubrics(
     client: anthropic.AsyncAnthropic,
     model: str,
     cache: Cache,
-    max_concurrent: int = 5,
+    semaphore: asyncio.Semaphore,
 ) -> dict[str, str]:
     """Generate fit rubrics for each unique company.
 
@@ -244,8 +244,6 @@ async def generate_fit_rubrics(
         Dict mapping canonical company name to rubric text.
     """
     from job_scraper.companies import canonicalize
-
-    semaphore = asyncio.Semaphore(max_concurrent)
     results: dict[str, str] = {}
 
     async def gen_one(name: str) -> None:

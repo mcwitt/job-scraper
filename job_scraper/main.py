@@ -268,7 +268,7 @@ async def _run(
     score_cache_path = cache_dir / "score.jsonl"
 
     company_names = {j.company for j in filtered_jobs}
-    rubric_semaphore = asyncio.Semaphore(5)
+    rubric_semaphore = asyncio.Semaphore(max_concurrent_api)
 
     async with open_cache(rubric_cache_path) as rubric_cache:
         interest_rubric, fit_rubrics = await asyncio.gather(
@@ -286,6 +286,7 @@ async def _run(
                 ai,
                 rubric_model,
                 rubric_cache,
+                rubric_semaphore,
             ),
         )
 
