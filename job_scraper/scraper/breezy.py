@@ -27,8 +27,8 @@ def scrape_board(company: str, *, name: str):
 
     async def scrape(http: Http) -> AsyncIterator[Job]:
         url = f"https://{company}.breezy.hr/json"
-        body, scraped_at = await http.get(url)
-        postings = json.loads(body)
+        resp = await http.get(url)
+        postings = json.loads(resp.body)
         for posting in postings:
             title = posting.get("name", "")
             post_url = posting.get("url", "")
@@ -40,8 +40,8 @@ def scrape_board(company: str, *, name: str):
             loc = posting.get("location") or {}
             location = loc.get("name") or None
 
-            page_body, _ = await http.get(post_url)
-            description = _extract_description(page_body)
+            page_resp = await http.get(post_url)
+            description = _extract_description(page_resp.body)
 
             h = job_hash(title, name, description)
             yield Job(
@@ -55,7 +55,7 @@ def scrape_board(company: str, *, name: str):
                 location=location,
                 description=description,
                 source=f"breezy:{company}",
-                scraped_at=scraped_at,
+                scraped_at=resp.fetched_at,
             )
 
     return scrape

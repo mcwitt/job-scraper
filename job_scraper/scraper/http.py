@@ -9,6 +9,8 @@ from typing import Any
 
 import httpx
 
+from job_scraper.cache import Cache
+
 logger = logging.getLogger(__name__)
 
 _ERROR_TTL = 3600  # cache HTTP errors for 1 hour
@@ -27,24 +29,37 @@ class CachedHttpError(Exception):
 
 
 @dataclass(frozen=True)
+class CachedResponse:
+    body: str
+    fetched_at: str
+
+
+@dataclass(frozen=True)
 class Http:
     """Async HTTP client with caching and rate-limiting."""
 
     client: httpx.AsyncClient
-    cache_get: Callable[[str], dict[str, Any] | None]
-    cache_put: Callable[[str, dict[str, Any]], None]
+    cache: Cache
     semaphore: asyncio.Semaphore
     cache_ttl: float | None = None
 
-    def _put(
-        self, key: str, value: dict[str, Any]
-    ) -> str:
+    def _put_success(
+        self, key: str, body: str
+    ) -> CachedResponse:
         now = datetime.now(UTC).isoformat()
-        value = {**value, "fetched_at": now}
+        entry: dict[str, Any] = {
+            "body": body,
+            "fetched_at": now,
+        }
         if self.cache_ttl is not None:
-            value["_ttl"] = self.cache_ttl
-        self.cache_put(key, value)
-        return now
+            entry["_ttl"] = self.cache_ttl
+        self.cache.put(key, entry)
+        return CachedResponse(body, now)
+
+    def _put_error(self, key: str, status_code: int) -> None:
+        self.cache.put(
+            key, {"error": status_code, "_ttl": _ERROR_TTL}
+        )
 
     async def _fetch(
         self,
@@ -52,16 +67,17 @@ class Http:
         make_request: Callable[[], Coroutine[Any, Any, httpx.Response]],
         method: str,
         url: str,
-    ) -> tuple[str, str]:
+    ) -> CachedResponse:
         """Execute an HTTP request with caching and retries."""
-        cached = self.cache_get(cache_key)
+        cached = self.cache.get(cache_key)
         if cached is not None:
             if "error" in cached:
                 raise CachedHttpError(url, cached["error"])
-            fetched_at = cached.get("fetched_at") or datetime.now(
-                UTC
-            ).isoformat()
-            return cached["body"], fetched_at
+            return CachedResponse(
+                body=cached["body"],
+                fetched_at=cached.get("fetched_at")
+                or datetime.now(UTC).isoformat(),
+            )
         last_exc: httpx.HTTPStatusError | None = None
         for attempt in range(_MAX_ATTEMPTS):
             async with self.semaphore:
@@ -71,12 +87,9 @@ class Http:
                 except httpx.HTTPStatusError as exc:
                     last_exc = exc
                     if exc.response.status_code not in _RETRYABLE:
-                        self.cache_put(
+                        self._put_error(
                             cache_key,
-                            {
-                                "error": exc.response.status_code,
-                                "_ttl": _ERROR_TTL,
-                            },
+                            exc.response.status_code,
                         )
                         raise
                 else:
@@ -98,18 +111,13 @@ class Http:
         else:
             if last_exc is None:
                 raise RuntimeError("unreachable")
-            self.cache_put(
-                cache_key,
-                {
-                    "error": last_exc.response.status_code,
-                    "_ttl": _ERROR_TTL,
-                },
+            self._put_error(
+                cache_key, last_exc.response.status_code
             )
             raise last_exc
-        fetched_at = self._put(cache_key, {"body": body})
-        return body, fetched_at
+        return self._put_success(cache_key, body)
 
-    async def get(self, url: str) -> tuple[str, str]:
+    async def get(self, url: str) -> CachedResponse:
         """Return (body, fetched_at) for a GET request."""
         return await self._fetch(
             url,
@@ -120,7 +128,7 @@ class Http:
 
     async def post(
         self, url: str, *, json: dict[str, Any]
-    ) -> tuple[str, str]:
+    ) -> CachedResponse:
         """Return (body, fetched_at) for a POST request."""
         return await self._post(
             url,
@@ -134,7 +142,7 @@ class Http:
         *,
         data: dict[str, Any],
         headers: dict[str, str] | None = None,
-    ) -> tuple[str, str]:
+    ) -> CachedResponse:
         """Return (body, fetched_at) for a form-encoded POST."""
         return await self._post(
             url,
@@ -148,7 +156,7 @@ class Http:
         url: str,
         cache_suffix: str,
         **kwargs: Any,
-    ) -> tuple[str, str]:
+    ) -> CachedResponse:
         return await self._fetch(
             f"POST {url} {cache_suffix}",
             lambda: self.client.post(url, **kwargs),

@@ -13,8 +13,8 @@ def scrape_board(company: str, *, name: str):
         url = (
             f"https://api.gem.com/job_board/v0/{company}/job_posts/"
         )
-        body, scraped_at = await http.get(url)
-        postings = json.loads(body)
+        resp = await http.get(url)
+        postings = json.loads(resp.body)
         for posting in postings:
             title = posting.get("title", "")
             description = posting.get("content_plain", "")
@@ -41,7 +41,7 @@ def scrape_board(company: str, *, name: str):
                 location=location,
                 description=description,
                 source=f"gem:{company}",
-                scraped_at=scraped_at,
+                scraped_at=resp.fetched_at,
             )
 
     return scrape

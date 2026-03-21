@@ -14,13 +14,14 @@ python -m job_scraper.main
 
 ## Architecture
 
-**Pipeline:** scrape → dedupe → keywords boolean filter → active learning (similarity seed / ensemble disagreement exploration) → surrogate ranking → LLM score top-k → sort → output
+**Pipeline:** scrape → dedupe → keywords boolean filter → rubric generation → active learning (similarity seed / ensemble disagreement exploration) → surrogate ranking → LLM score top-k → sort → output
 
 Key files:
 - `job_scraper/main.py` — CLI (Typer) and pipeline orchestration
 - `job_scraper/relevance.py` — FTS5 boolean filtering against keywords
+- `job_scraper/rubric.py` — pre-generated interest/fit rubrics via meta-rubric prompts
 - `job_scraper/surrogate.py` — TF-IDF + Ridge surrogate with bootstrap ensemble for active learning
-- `job_scraper/scorer.py` — Claude scoring with prompt caching and structured output
+- `job_scraper/scorer.py` — Claude scoring with prompt caching and structured output (single combined call)
 - `job_scraper/companies/` — company context package (bundled `.md` files + `canonicalize`/`load_companies`)
 - `job_scraper/cache.py` — JSONL append-log cache with TTL
 - `job_scraper/models.py` — Job/ScoredJob/Interest/Fit frozen dataclasses
@@ -88,4 +89,11 @@ Pre-commit hooks (run via `nix fmt` or `pre-commit run --all-files`):
 
 ## Scores
 
-LLM scores are floats 0.0-1.0 internally. Only the HTML report converts to 0-100 for display.
+LLM scores are int 0-100 throughout. The surrogate model normalizes to [0, 1] internally via `score / 100`.
+
+## Rubrics
+
+Scoring uses pre-generated rubrics instead of raw preferences/resume in each scoring call:
+- **Interest rubric** — generated once from `(meta_rubric, preferences.md)`, cached in `rubrics.jsonl`
+- **Fit rubric** — generated per company from `(meta_rubric, resume.md, company_context)`, cached in `rubrics.jsonl`
+- `--rubric-model` controls the model used for rubric generation (default: sonnet)

@@ -6,6 +6,7 @@ from pathlib import Path
 
 import httpx
 
+from job_scraper.cache import Cache
 from job_scraper.models import Job
 from job_scraper.scraper.http import Http
 
@@ -25,8 +26,7 @@ def run(fn: ScrapeFn) -> None:
         ) as client:
             http = Http(
                 client=client,
-                cache_get=lambda _: None,
-                cache_put=lambda _k, _v: None,
+                cache=Cache(lambda _: None, lambda _k, _v: None),
                 semaphore=asyncio.Semaphore(5),
             )
             async for job in fn(http):

@@ -15,8 +15,8 @@ def scrape_board(slug: str, *, name: str):
     """Return a scrape function for a Rippling job board."""
 
     async def scrape(http: Http) -> AsyncIterator[Job]:
-        body, _ = await http.get(f"{API}/{slug}/jobs")
-        listings = json.loads(body)
+        resp = await http.get(f"{API}/{slug}/jobs")
+        listings = json.loads(resp.body)
 
         # Dedupe by uuid (multi-location jobs repeat).
         seen: set[str] = set()
@@ -26,10 +26,10 @@ def scrape_board(slug: str, *, name: str):
                 continue
             seen.add(uuid)
 
-            detail_body, scraped_at = await http.get(
+            detail_resp = await http.get(
                 f"{API}/{slug}/jobs/{uuid}"
             )
-            detail = json.loads(detail_body)
+            detail = json.loads(detail_resp.body)
 
             title = detail.get("name", "")
             desc_parts = []
@@ -71,7 +71,7 @@ def scrape_board(slug: str, *, name: str):
                 location=location,
                 description=description,
                 source=f"rippling:{slug}",
-                scraped_at=scraped_at,
+                scraped_at=detail_resp.fetched_at,
             )
 
     return scrape

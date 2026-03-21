@@ -27,7 +27,7 @@ def scrape_board(company: str, instance: str, site: str, *, name: str):
         stubs: list[tuple[str, str, str | None]] = []
 
         try:
-            first_body, scraped_at = await http.post(
+            first_resp = await http.post(
                 jobs_url,
                 json={
                     "limit": _PAGE_SIZE,
@@ -43,7 +43,7 @@ def scrape_board(company: str, instance: str, site: str, *, name: str):
             )
             return
 
-        first = json.loads(first_body)
+        first = json.loads(first_resp.body)
         total = first.get("total", 0)
         logger.info(
             "company=%s listings=%d",
@@ -66,7 +66,7 @@ def scrape_board(company: str, instance: str, site: str, *, name: str):
         # Fetch remaining pages concurrently
         async def fetch_page(offset: int) -> list[dict]:
             try:
-                body, _ = await http.post(
+                resp = await http.post(
                     jobs_url,
                     json={
                         "limit": _PAGE_SIZE,
@@ -75,7 +75,7 @@ def scrape_board(company: str, instance: str, site: str, *, name: str):
                         "searchText": "",
                     },
                 )
-                return json.loads(body).get("jobPostings", [])
+                return json.loads(resp.body).get("jobPostings", [])
             except Exception:
                 logger.warning(
                     "company=%s offset=%d page_error=true",
@@ -101,8 +101,8 @@ def scrape_board(company: str, instance: str, site: str, *, name: str):
             nonlocal done
             url = f"{base}/wday/cxs/{company}/{site}{ext_path}"
             try:
-                body, _ = await http.get(url)
-                info = json.loads(body).get("jobPostingInfo", {})
+                resp = await http.get(url)
+                info = json.loads(resp.body).get("jobPostingInfo", {})
                 desc_html = info.get("jobDescription", "")
                 desc = html_to_text(desc_html) if desc_html else ""
                 start = info.get("startDate")
@@ -162,7 +162,7 @@ def scrape_board(company: str, instance: str, site: str, *, name: str):
                 location=detail_loc or listing_loc,
                 description=description,
                 source=f"workday:{company}",
-                scraped_at=scraped_at,
+                scraped_at=first_resp.fetched_at,
             )
 
     return scrape

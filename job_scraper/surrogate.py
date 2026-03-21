@@ -32,12 +32,12 @@ class Example:
     location: str | None
     team: str | None
     comp: str | None
-    interest_score: float
-    fit_score: float
+    interest_score: int
+    fit_score: int
 
 
 def job_to_example(
-    job: Job, interest_score: float, fit_score: float
+    job: Job, interest_score: int, fit_score: int
 ) -> Example:
     return Example(
         hash=job.hash,
@@ -173,7 +173,7 @@ def train(
 ) -> tuple[TfidfVectorizer, Ridge, list[Ridge], Metrics]:
     texts = [_text(ex) for ex in examples]
     targets = np.array([
-        ex.interest_score * ex.fit_score
+        (ex.interest_score / 100) * (ex.fit_score / 100)
         for ex in examples
     ])
     vectorizer = _make_vectorizer()

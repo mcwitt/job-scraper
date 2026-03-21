@@ -28,8 +28,8 @@ def scrape_board(company: str, *, name: str, eu: bool = False):
     async def scrape(http: Http) -> AsyncIterator[Job]:
         host = "api.eu.lever.co" if eu else "api.lever.co"
         url = f"https://{host}/v0/postings/{company}?mode=json"
-        body, scraped_at = await http.get(url)
-        postings = json.loads(body)
+        resp = await http.get(url)
+        postings = json.loads(resp.body)
         for posting in postings:
             title = posting.get("text", "")
             categories = posting.get("categories", {})
@@ -63,7 +63,7 @@ def scrape_board(company: str, *, name: str, eu: bool = False):
                 location=location,
                 description=description,
                 source=f"lever:{company}",
-                scraped_at=scraped_at,
+                scraped_at=resp.fetched_at,
             )
 
     return scrape

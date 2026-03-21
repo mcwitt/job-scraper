@@ -21,12 +21,12 @@ class Interest:
     strengths_alignment: str
     growth_opportunities: str
     role_type_fit: str
+    industry_alignment: str
     company_reputation: str
     compensation: str
     location: str
-    dealbreakers: str
     summary: str
-    score: float
+    score: int
 
 
 @dataclass(frozen=True)
@@ -39,7 +39,13 @@ class Fit:
     seniority_alignment: str
     location_visa: str
     summary: str
-    score: float
+    score: int
+
+
+@dataclass(frozen=True)
+class Score:
+    interest: Interest
+    fit: Fit
 
 
 @dataclass(frozen=True)

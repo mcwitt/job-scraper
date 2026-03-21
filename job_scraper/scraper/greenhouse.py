@@ -31,8 +31,8 @@ def scrape_board(token: str, *, name: str):
 
     async def scrape(http: Http) -> AsyncIterator[Job]:
         url = f"https://boards-api.greenhouse.io/v1/boards/{token}/jobs?content=true&pay_transparency=true"
-        body, scraped_at = await http.get(url)
-        data = json.loads(body)
+        resp = await http.get(url)
+        data = json.loads(resp.body)
         for posting in data.get("jobs", []):
             title = posting.get("title", "")
             content = posting.get("content", "")
@@ -64,7 +64,7 @@ def scrape_board(token: str, *, name: str):
                 location=location,
                 description=description,
                 source=f"greenhouse:{token}",
-                scraped_at=scraped_at,
+                scraped_at=resp.fetched_at,
             )
 
     return scrape

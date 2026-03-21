@@ -61,8 +61,8 @@ python -m job_scraper.main --skip-score --keywords 'title:engineer AND location:
 # Full pipeline: scrape + filter + surrogate rank + score + report
 python -m job_scraper.main --keywords '(title:engineer OR title:scientist) NOT title:intern' --report
 
-# Customize scoring model
-python -m job_scraper.main --model claude-haiku-4-5-20251001
+# Customize scoring model and rubric generation model
+python -m job_scraper.main --model claude-haiku-4-5-20251001 --rubric-model claude-sonnet-4-6
 
 # Keep only the top 50 jobs for LLM scoring (default: 200)
 python -m job_scraper.main --top-k 50
@@ -89,7 +89,7 @@ Output goes to `data/output/` by default:
 
 ## Architecture
 
-**Pipeline:** scrape → dedupe → keywords boolean filter → active learning (similarity seed / ensemble disagreement exploration) → surrogate ranking → LLM score top-k → sort → output
+**Pipeline:** scrape → dedupe → keywords boolean filter → rubric generation → active learning (similarity seed / ensemble disagreement exploration) → surrogate ranking → LLM score top-k → sort → output
 
 ### Scraper discovery
 
@@ -102,6 +102,7 @@ Every `.py` file in `job_scraper/scraper/` whose name does not start with `_` is
 | `job_scraper/main.py` | CLI (Typer) and pipeline orchestration |
 | `job_scraper/relevance.py` | FTS5 boolean filtering against `keywords` |
 | `job_scraper/surrogate.py` | TF-IDF + Ridge surrogate with bootstrap ensemble for active learning |
+| `job_scraper/rubric.py` | Pre-generated interest/fit rubrics via meta-rubric prompts |
 | `job_scraper/scorer.py` | Claude scoring with prompt caching and structured output |
 | `job_scraper/cache.py` | JSONL append-log cache with TTL |
 | `job_scraper/models.py` | `Job` / `ScoredJob` frozen dataclasses |
@@ -131,8 +132,8 @@ from job_scraper.scraper.http import Http
 
 async def scrape(http: Http) -> AsyncIterator[Job]:
     now = datetime.now(UTC).isoformat()
-    body = await http.get("https://example.com/jobs.json")
-    # parse and yield Job objects...
+    resp = await http.get("https://example.com/jobs.json")
+    # parse resp.body and yield Job objects...
 ```
 
 ## Configuration files
@@ -147,11 +148,11 @@ Syntax: `"phrases"`, `AND`/`OR`/`NOT`, `(grouping)`. Prefix terms with `title:` 
 
 ### `preferences.md` — interest scoring
 
-Describes what you're looking for in your next role: target titles, ideal characteristics, dealbreakers, and location constraints. Claude reads this alongside each job posting to produce an **interest score** — how excited you would be about the role based on your stated aspirations and preferences.
+Describes what you're looking for in your next role: target titles, ideal characteristics, hard constraints, and location preferences. A rubric-generation model reads this once to produce a candidate-specific interest rubric with concrete scoring bands. The rubric is then used to score each job consistently.
 
 ### `resume.md` — recruiter-fit scoring
 
-Your resume in Markdown. Claude reads this alongside each job posting to produce a **fit score** — how likely a recruiter would be to advance your application based on your background and experience. This is scored independently from interest so you can see roles you'd love but might be a stretch, and roles you're qualified for but might not want.
+Your resume in Markdown. A rubric-generation model reads this once per company to produce a company-specific fit rubric. The rubric is then used to produce a **fit score** — how likely a recruiter would advance your application. This is scored independently from interest so you can see roles you'd love but might be a stretch, and roles you're qualified for but might not want.
 
 ## NixOS deployment
 
@@ -176,7 +177,8 @@ Add the flake as an input and import the module:
             anthropicApiKeyFile = "/run/secrets/anthropic-api-key";
 
             settings = {
-              model = "claude-haiku-4-5-20251001";
+              model = "claude-haiku-4-5";
+              rubricModel = "claude-sonnet-4-6";
               topK = 200;
               numActiveIters = 3;  # active learning iterations on cold start
             };

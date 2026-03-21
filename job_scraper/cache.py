@@ -3,7 +3,12 @@ import time
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
+
+
+class Cache(NamedTuple):
+    get: Callable[[str], dict[str, Any] | None]
+    put: Callable[[str, dict[str, Any]], None]
 
 
 def _load(path: Path, ttl: float | None) -> dict[str, dict[str, Any]]:
@@ -41,9 +46,7 @@ def _compact(path: Path, entries: dict[str, dict[str, Any]]) -> None:
 @asynccontextmanager
 async def open_cache(
     path: str | Path, ttl: float | None = None
-) -> AsyncIterator[
-    tuple[Callable[[str], dict[str, Any] | None], Callable[[str, dict[str, Any]], None]]
-]:
+) -> AsyncIterator[Cache]:
     """Open a JSONL cache, yielding (get, put) closures.
 
     Args:
@@ -70,7 +73,7 @@ async def open_cache(
             f.write(json.dumps(record, separators=(",", ":")) + "\n")
 
     try:
-        yield get, put
+        yield Cache(get, put)
     finally:
         if dirty:
             _compact(p, entries)

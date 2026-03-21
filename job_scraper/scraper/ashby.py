@@ -18,8 +18,8 @@ def scrape_board(board: str, *, name: str):
             f"https://api.ashbyhq.com/posting-api/job-board/"
             f"{board}?includeCompensation=true"
         )
-        body, scraped_at = await http.get(url)
-        data = json.loads(body)
+        resp = await http.get(url)
+        data = json.loads(resp.body)
         for posting in data.get("jobs", []):
             title = posting.get("title", "")
             team = posting.get("department") or posting.get("team")
@@ -45,7 +45,7 @@ def scrape_board(board: str, *, name: str):
                 location=location,
                 description=description,
                 source=f"ashby:{board}",
-                scraped_at=scraped_at,
+                scraped_at=resp.fetched_at,
             )
 
     return scrape

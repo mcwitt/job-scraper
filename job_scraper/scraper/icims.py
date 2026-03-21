@@ -19,8 +19,8 @@ def scrape_board(domain: str, *, name: str):
         page = 1
         while True:
             url = f"{base}?page={page}"
-            body, scraped_at = await http.get(url)
-            data = json.loads(body)
+            resp = await http.get(url)
+            data = json.loads(resp.body)
             jobs = data.get("jobs", [])
             if not jobs:
                 break
@@ -66,7 +66,7 @@ def scrape_board(domain: str, *, name: str):
                     location=location,
                     description=description,
                     source=f"icims:{domain}",
-                    scraped_at=scraped_at,
+                    scraped_at=resp.fetched_at,
                 )
             page += 1
 

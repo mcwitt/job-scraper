@@ -44,8 +44,8 @@ def scrape_board(domain: str, *, name: str):
                 ],
                 "keywords": "",
             }
-            body, scraped_at = await http.post(widgets_url, json=payload)
-            data = json.loads(body)
+            resp = await http.post(widgets_url, json=payload)
+            data = json.loads(resp.body)
             refine = data.get("refineSearch", {})
             jobs = refine.get("data", {}).get("jobs", [])
             stubs.extend(jobs)
@@ -64,8 +64,8 @@ def scrape_board(domain: str, *, name: str):
                 "ddoKey": "jobDetail",
                 "jobSeqNo": seq_no,
             }
-            body, _ = await http.post(widgets_url, json=payload)
-            detail = json.loads(body)
+            detail_resp = await http.post(widgets_url, json=payload)
+            detail = json.loads(detail_resp.body)
             desc_html = (
                 detail.get("jobDetail", {})
                 .get("data", {})
@@ -101,7 +101,7 @@ def scrape_board(domain: str, *, name: str):
                 location=location,
                 description=description,
                 source=f"phenom:{domain}",
-                scraped_at=scraped_at,
+                scraped_at=resp.fetched_at,
             )
 
     return scrape

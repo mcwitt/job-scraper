@@ -23,7 +23,7 @@ def scrape_board(company: str, *, name: str):
         stubs: list[tuple[str, str, str | None, str | None]] = []
 
         try:
-            first_body, scraped_at = await http.get(
+            first_resp = await http.get(
                 f"{list_url}?limit={_PAGE_SIZE}&offset=0"
             )
         except Exception:
@@ -33,7 +33,7 @@ def scrape_board(company: str, *, name: str):
             )
             return
 
-        first = json.loads(first_body)
+        first = json.loads(first_resp.body)
         total = first.get("totalFound", 0)
         logger.info(
             "company=%s listings=%d",
@@ -58,11 +58,11 @@ def scrape_board(company: str, *, name: str):
             offset: int,
         ) -> list[dict]:
             try:
-                body, _ = await http.get(
+                resp = await http.get(
                     f"{list_url}?limit={_PAGE_SIZE}"
                     f"&offset={offset}"
                 )
-                return json.loads(body).get("content", [])
+                return json.loads(resp.body).get("content", [])
             except Exception:
                 logger.warning(
                     "company=%s offset=%d page_error=true",
@@ -87,8 +87,8 @@ def scrape_board(company: str, *, name: str):
             nonlocal done
             url = f"{list_url}/{posting_id}"
             try:
-                body, _ = await http.get(url)
-                data = json.loads(body)
+                resp = await http.get(url)
+                data = json.loads(resp.body)
                 sections = (
                     data.get("jobAd", {}).get("sections", {})
                 )
@@ -148,7 +148,7 @@ def scrape_board(company: str, *, name: str):
                 location=location,
                 description=description,
                 source=f"smartrecruiters:{company}",
-                scraped_at=scraped_at,
+                scraped_at=first_resp.fetched_at,
             )
 
     return scrape

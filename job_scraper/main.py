@@ -7,8 +7,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
 if TYPE_CHECKING:
-    import anthropic
-
     from job_scraper.status import SourceStatus
 
 import dacite
@@ -91,8 +89,7 @@ async def _scrape(
         httpx.AsyncClient(follow_redirects=True, timeout=30) as client,
         open_cache(scrape_cache_path, ttl=scrape_ttl) as scrape_cache,
     ):
-        cache_get, cache_put = scrape_cache
-        http = Http(client, cache_get, cache_put, semaphore)
+        http = Http(client, scrape_cache, semaphore)
 
         all_jobs: list[Job] = []
 
@@ -109,24 +106,20 @@ async def _scrape(
                 logger.error("scraper=%s error=%s", name, exc)
                 return (name, [], str(exc))
 
-        async with asyncio.TaskGroup() as tg:
-            tasks = [
-                tg.create_task(
-                    collect(
-                        name,
-                        fn,
-                        dataclasses.replace(http, cache_ttl=ttl)
-                        if ttl is not None
-                        else http,
-                    )
-                )
-                for name, fn, ttl in scrapers
-            ]
+        results = await asyncio.gather(*(
+            collect(
+                name,
+                fn,
+                dataclasses.replace(http, cache_ttl=ttl)
+                if ttl is not None
+                else http,
+            )
+            for name, fn, ttl in scrapers
+        ))
 
         errors: list[dict] = []
         now_str = datetime.now(UTC).isoformat()
-        for task in tasks:
-            name, jobs, error = task.result()
+        for name, jobs, error in results:
             all_jobs.extend(jobs)
             if error is None:
                 statuses = _status.record_run(
@@ -163,55 +156,12 @@ async def _scrape(
     return all_jobs, statuses
 
 
-async def _score_jobs(
-    jobs: list[Job],
-    preferences_text: str,
-    resume_text: str,
-    ai: "anthropic.AsyncAnthropic",
-    model: str,
-    interest_cache: tuple,
-    fit_cache: tuple,
-    companies: dict[str, str],
-    max_concurrent_api: int,
-) -> dict[str, dict]:
-    """Score jobs via LLM, return {hash: {interest: ..., fit: ...}}."""
-    from job_scraper.scorer import score_fit, score_interest
-
-    interest_scores, fit_scores = await asyncio.gather(
-        score_interest(
-            jobs,
-            preferences_text,
-            ai,
-            model,
-            interest_cache,
-            companies=companies,
-            max_concurrent=max_concurrent_api,
-        ),
-        score_fit(
-            jobs,
-            resume_text,
-            ai,
-            model,
-            fit_cache,
-            companies=companies,
-            max_concurrent=max_concurrent_api,
-        ),
-    )
-
-    results: dict[str, dict] = {}
-    for job in jobs:
-        i = interest_scores.get(job.hash)
-        f = fit_scores.get(job.hash)
-        if i is not None and f is not None:
-            results[job.hash] = {"interest": i, "fit": f}
-    return results
-
-
 async def _run(
     cache_dir: Path,
     output_dir: Path,
     scrape_ttl: int,
     model: str,
+    rubric_model: str,
     preferences_path: Path,
     max_concurrent: int,
     max_concurrent_api: int,
@@ -285,7 +235,7 @@ async def _run(
     import anthropic
 
     from job_scraper.companies import load_companies
-    from job_scraper.models import Fit, Interest, ScoredJob
+    from job_scraper.models import Score, ScoredJob
     from job_scraper.surrogate import (
         append_examples,
         job_to_example,
@@ -307,16 +257,48 @@ async def _run(
     companies = load_companies()
     ai = anthropic.AsyncAnthropic()
 
+    # --- Generate rubrics ---
+    from job_scraper.rubric import (
+        generate_fit_rubrics,
+        generate_interest_rubric,
+    )
+    from job_scraper.scorer import score_combined
+
+    rubric_cache_path = cache_dir / "rubrics.jsonl"
+    score_cache_path = cache_dir / "score.jsonl"
+
+    company_names = {j.company for j in filtered_jobs}
+    rubric_semaphore = asyncio.Semaphore(5)
+
+    async with open_cache(rubric_cache_path) as rubric_cache:
+        interest_rubric, fit_rubrics = await asyncio.gather(
+            generate_interest_rubric(
+                preferences_text,
+                ai,
+                rubric_model,
+                rubric_cache,
+                rubric_semaphore,
+            ),
+            generate_fit_rubrics(
+                resume_text,
+                companies,
+                company_names,
+                ai,
+                rubric_model,
+                rubric_cache,
+            ),
+        )
+
     def _to_examples(
         jobs: list[Job],
-        results: dict[str, dict],
+        results: dict[str, Score],
         exclude: set[str] | None = None,
     ) -> list:
         return [
             job_to_example(
                 job,
-                results[job.hash]["interest"]["score"],
-                results[job.hash]["fit"]["score"],
+                results[job.hash].interest.score,
+                results[job.hash].fit.score,
             )
             for job in jobs
             if job.hash in results
@@ -335,13 +317,7 @@ async def _run(
 
     reference = preferences_text + "\n\n" + resume_text
 
-    score_cache_path = cache_dir / "score_interest.jsonl"
-    fit_cache_path = cache_dir / "score_fit.jsonl"
-
-    async with (
-        open_cache(score_cache_path) as interest_cache,
-        open_cache(fit_cache_path) as fit_cache,
-    ):
+    async with open_cache(score_cache_path) as score_cache:
 
         async def _score_and_learn(
             batch: list[Job],
@@ -349,16 +325,14 @@ async def _run(
             nonlocal examples
             if not batch:
                 return
-            results = await _score_jobs(
+            results = await score_combined(
                 batch,
-                preferences_text,
-                resume_text,
+                interest_rubric,
+                fit_rubrics,
                 ai,
                 model,
-                interest_cache,
-                fit_cache,
-                companies,
-                max_concurrent_api,
+                score_cache,
+                max_concurrent=max_concurrent_api,
             )
             new_examples = _to_examples(
                 batch, results
@@ -482,16 +456,14 @@ async def _run(
             )
 
         # Score top-k (cache hits for already-scored explore jobs)
-        topk_results = await _score_jobs(
+        topk_results = await score_combined(
             top_jobs,
-            preferences_text,
-            resume_text,
+            interest_rubric,
+            fit_rubrics,
             ai,
             model,
-            interest_cache,
-            fit_cache,
-            companies,
-            max_concurrent_api,
+            score_cache,
+            max_concurrent=max_concurrent_api,
         )
 
         # Append newly scored (not in explore batch) to training data
@@ -517,8 +489,8 @@ async def _run(
             if data := topk_results.get(job.hash):
                 topk_surr.append(surr_by_hash[job.hash])
                 topk_actual.append(
-                    data["interest"]["score"]
-                    * data["fit"]["score"]
+                    (data.interest.score / 100)
+                    * (data.fit.score / 100)
                 )
 
         topk_spearman = rank_agreement(topk_actual, topk_surr)
@@ -552,14 +524,16 @@ async def _run(
         scored.append(
             ScoredJob(
                 **to_dict(job),
-                score_interest=Interest(**data["interest"]),
-                score_fit=Fit(**data["fit"]),
+                score_interest=data.interest,
+                score_fit=data.fit,
             )
         )
 
     # Sort by priority (candidate * recruiter) descending
     def _priority(j: ScoredJob) -> float:
-        return j.score_interest.score * j.score_fit.score
+        return (j.score_interest.score / 100) * (
+            j.score_fit.score / 100
+        )
 
     scored.sort(key=_priority, reverse=True)
 
@@ -596,6 +570,10 @@ def run(
     model: Annotated[
         str, typer.Option(help="Claude model for scoring")
     ] = "claude-haiku-4-5-20251001",
+    rubric_model: Annotated[
+        str,
+        typer.Option(help="Claude model for rubric generation"),
+    ] = "claude-sonnet-4-6",
     preferences: Annotated[
         Path, typer.Option(help="Path to candidate preferences")
     ] = Path("preferences.md"),
@@ -727,6 +705,7 @@ def run(
             output_dir=output_dir,
             scrape_ttl=scrape_ttl,
             model=model,
+            rubric_model=rubric_model,
             preferences_path=preferences,
             max_concurrent=max_concurrent,
             max_concurrent_api=max_concurrent_api,

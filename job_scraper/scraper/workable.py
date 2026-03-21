@@ -27,8 +27,8 @@ def scrape_board(board: str, *, name: str):
         token: str | None = None
         while True:
             payload: dict = {"token": token} if token else {}
-            body, scraped_at = await http.post(list_url, json=payload)
-            data = json.loads(body)
+            resp = await http.post(list_url, json=payload)
+            data = json.loads(resp.body)
             stubs.extend(data.get("results", []))
             token = data.get("nextPage")
             if not token:
@@ -39,8 +39,8 @@ def scrape_board(board: str, *, name: str):
             detail_url = (
                 f"https://apply.workable.com/api/v2/accounts/{board}/jobs/{shortcode}"
             )
-            body, _ = await http.get(detail_url)
-            detail = json.loads(body)
+            detail_resp = await http.get(detail_url)
+            detail = json.loads(detail_resp.body)
             desc_html = detail.get("description", "")
             return html_to_text(desc_html) if desc_html else ""
 
@@ -73,7 +73,7 @@ def scrape_board(board: str, *, name: str):
                 location=loc_str,
                 description=description,
                 source=f"workable:{board}",
-                scraped_at=scraped_at,
+                scraped_at=resp.fetched_at,
             )
 
     return scrape

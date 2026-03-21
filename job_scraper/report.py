@@ -133,27 +133,25 @@ TEMPLATE = """\
       <td class="narrow tip tip-score"
         data-sort="{{ score }}">
         <span class="badge {{ score_class(score) }}"
-          >{{ (score * 100) | round(0) | int }}</span>
+          >{{ score | round(0) | int }}</span>
         <div class="tip-body">
-          <dt>Interest
-            {{ (cv * 100) | round(0) | int }}</dt>
+          <dt>Interest {{ cv }}</dt>
           <dd>{{ job.score_interest.summary }}</dd>
-          <dt>Fit
-            {{ (rv * 100) | round(0) | int }}</dt>
+          <dt>Fit {{ rv }}</dt>
           <dd>{{ job.score_fit.summary }}</dd>
         </div>
       </td>
       <td class="narrow tip tip-score"
         data-sort="{{ cv }}">
         <span class="badge {{ score_class(cv) }}"
-          >{{ (cv * 100) | round(0) | int }}</span>
+          >{{ cv }}</span>
         <div class="tip-body">
           {{ job.score_interest.summary }}</div>
       </td>
       <td class="narrow tip tip-score"
         data-sort="{{ rv }}">
         <span class="badge {{ score_class(rv) }}"
-          >{{ (rv * 100) | round(0) | int }}</span>
+          >{{ rv }}</span>
         <div class="tip-body">
           {{ job.score_fit.summary }}</div>
       </td>
@@ -315,9 +313,9 @@ def _date_class(date_str: str | None) -> str:
 
 
 def _score_class(score: float) -> str:
-    if score >= 0.7:
+    if score >= 70:
         return "badge-green"
-    if score >= 0.4:
+    if score >= 40:
         return "badge-yellow"
     return "badge-red"
 
