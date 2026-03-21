@@ -179,12 +179,12 @@ in
       };
       numExplore = mkOption {
         type = types.int;
-        default = 20;
-        description = "Unscored jobs to explore each warm-start run.";
+        default = 30;
+        description = "Jobs to explore per active learning iteration.";
       };
       numActiveIters = mkOption {
         type = types.int;
-        default = 5;
+        default = 10;
         description = "Active learning iterations during cold start.";
       };
     };

@@ -649,15 +649,15 @@ def run(
     num_explore: Annotated[
         int,
         typer.Option(
-            help="Unscored jobs to explore each warm-start run"
+            help="Jobs to explore per active learning iteration"
         ),
-    ] = 20,
+    ] = 30,
     num_active_iters: Annotated[
         int,
         typer.Option(
             help="Active learning iterations during cold start"
         ),
-    ] = 5,
+    ] = 10,
 ) -> None:
     """Scrape and score job postings."""
     if scrape_only and input_jobs is not None:
