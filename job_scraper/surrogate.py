@@ -8,13 +8,16 @@ from scipy.sparse import spmatrix
 from scipy.stats import spearmanr
 from sklearn.ensemble import BaggingRegressor
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import Ridge
+from sklearn.linear_model import Ridge, RidgeCV
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.model_selection import cross_val_predict
 
 from job_scraper.models import Job
 
 logger = logging.getLogger(__name__)
+
+
+_ALPHAS = np.logspace(-2, 2, 20)  # 0.01 to 100, 20 points
 
 
 def _make_vectorizer() -> TfidfVectorizer:
@@ -102,8 +105,8 @@ class Metrics:
     cv_spearman: float
 
 
-def _evaluate(
-    X: spmatrix, targets: np.ndarray
+def _cv_metrics(
+    X: spmatrix, targets: np.ndarray, alpha: float
 ) -> Metrics:
     """Cross-validated evaluation on pre-computed features."""
     n = len(targets)
@@ -118,7 +121,7 @@ def _evaluate(
 
     n_folds = min(5, n)
     preds = cross_val_predict(
-        Ridge(alpha=1.0), X, targets, cv=n_folds
+        Ridge(alpha=alpha), X, targets, cv=n_folds
     )
 
     ss_res = float(np.sum((targets - preds) ** 2))
@@ -127,20 +130,12 @@ def _evaluate(
     mae = float(np.mean(np.abs(targets - preds)))
     rho = float(spearmanr(targets, preds).statistic)
 
-    metrics = Metrics(
+    return Metrics(
         n_examples=n,
         cv_r2=round(r2, 4),
         cv_mae=round(mae, 4),
         cv_spearman=round(rho, 4),
     )
-    logger.info(
-        "surrogate CV n=%d r2=%.4f mae=%.4f spearman=%.4f",
-        metrics.n_examples,
-        metrics.cv_r2,
-        metrics.cv_mae,
-        metrics.cv_spearman,
-    )
-    return metrics
 
 
 def seed_by_similarity(
@@ -178,24 +173,37 @@ def train(
     ])
     vectorizer = _make_vectorizer()
     X = vectorizer.fit_transform(texts)
-    model = Ridge(alpha=1.0)
+
+    # Pick alpha via built-in LOO cross-validation
+    rcv = RidgeCV(alphas=_ALPHAS)
+    rcv.fit(X, targets)  # type: ignore[arg-type]
+    alpha = float(rcv.alpha_)
+
+    model = Ridge(alpha=alpha)
     model.fit(X, targets)
     logger.info(
-        "trained surrogate examples=%d features=%d",
+        "trained surrogate examples=%d features=%d alpha=%.4f",
         len(examples),
         len(vectorizer.get_feature_names_out()),
+        alpha,
     )
 
     # Bootstrap ensemble for uncertainty estimation
     bag = BaggingRegressor(
-        estimator=Ridge(alpha=1.0),
+        estimator=Ridge(alpha=alpha),
         n_estimators=n_models,
         bootstrap=True,
     )
     bag.fit(X, targets)
     ensemble: list[Ridge] = bag.estimators_  # type: ignore[assignment]
 
-    metrics = _evaluate(X, targets)
+    metrics = _cv_metrics(X, targets, alpha)
+    logger.info(
+        "surrogate CV r2=%.4f mae=%.4f spearman=%.4f",
+        metrics.cv_r2,
+        metrics.cv_mae,
+        metrics.cv_spearman,
+    )
     return vectorizer, model, ensemble, metrics
 
 
