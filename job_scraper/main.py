@@ -161,7 +161,7 @@ async def _run(
     output_dir: Path,
     scrape_ttl: int,
     model: str,
-    rubric_model: str,
+    prep_model: str,
     preferences_path: Path,
     max_concurrent: int,
     max_concurrent_api: int,
@@ -257,36 +257,33 @@ async def _run(
     companies = load_companies()
     ai = anthropic.AsyncAnthropic()
 
-    # --- Generate rubrics ---
-    from job_scraper.rubric import (
-        generate_fit_rubrics,
+    # --- Generate prep artifacts ---
+    from job_scraper.prep import (
+        generate_candidate_brief,
         generate_interest_rubric,
     )
     from job_scraper.scorer import score_combined
 
-    rubric_cache_path = cache_dir / "rubrics.jsonl"
+    prep_cache_path = cache_dir / "prep.jsonl"
     score_cache_path = cache_dir / "score.jsonl"
 
-    company_names = {j.company for j in filtered_jobs}
-    rubric_semaphore = asyncio.Semaphore(max_concurrent_api)
+    prep_semaphore = asyncio.Semaphore(max_concurrent_api)
 
-    async with open_cache(rubric_cache_path) as rubric_cache:
-        interest_rubric, fit_rubrics = await asyncio.gather(
+    async with open_cache(prep_cache_path) as prep_cache:
+        interest_rubric, candidate_brief = await asyncio.gather(
             generate_interest_rubric(
                 preferences_text,
                 ai,
-                rubric_model,
-                rubric_cache,
-                rubric_semaphore,
+                prep_model,
+                prep_cache,
+                prep_semaphore,
             ),
-            generate_fit_rubrics(
+            generate_candidate_brief(
                 resume_text,
-                companies,
-                company_names,
                 ai,
-                rubric_model,
-                rubric_cache,
-                rubric_semaphore,
+                prep_model,
+                prep_cache,
+                prep_semaphore,
             ),
         )
 
@@ -329,7 +326,8 @@ async def _run(
             results = await score_combined(
                 batch,
                 interest_rubric,
-                fit_rubrics,
+                candidate_brief,
+                companies,
                 ai,
                 model,
                 score_cache,
@@ -460,7 +458,8 @@ async def _run(
         topk_results = await score_combined(
             top_jobs,
             interest_rubric,
-            fit_rubrics,
+            candidate_brief,
+            companies,
             ai,
             model,
             score_cache,
@@ -571,9 +570,9 @@ def run(
     model: Annotated[
         str, typer.Option(help="Claude model for scoring")
     ] = "claude-haiku-4-5-20251001",
-    rubric_model: Annotated[
+    prep_model: Annotated[
         str,
-        typer.Option(help="Claude model for rubric generation"),
+        typer.Option(help="Claude model for prep generation"),
     ] = "claude-sonnet-4-6",
     preferences: Annotated[
         Path, typer.Option(help="Path to candidate preferences")
@@ -706,7 +705,7 @@ def run(
             output_dir=output_dir,
             scrape_ttl=scrape_ttl,
             model=model,
-            rubric_model=rubric_model,
+            prep_model=prep_model,
             preferences_path=preferences,
             max_concurrent=max_concurrent,
             max_concurrent_api=max_concurrent_api,

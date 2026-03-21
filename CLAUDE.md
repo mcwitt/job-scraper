@@ -14,12 +14,12 @@ python -m job_scraper.main
 
 ## Architecture
 
-**Pipeline:** scrape → dedupe → keywords boolean filter → rubric generation → active learning (similarity seed / ensemble disagreement exploration) → surrogate ranking → LLM score top-k → sort → output
+**Pipeline:** scrape → dedupe → keywords boolean filter → prep (interest rubric + candidate brief) → active learning (similarity seed / ensemble disagreement exploration) → surrogate ranking → LLM score top-k → sort → output
 
 Key files:
 - `job_scraper/main.py` — CLI (Typer) and pipeline orchestration
 - `job_scraper/relevance.py` — FTS5 boolean filtering against keywords
-- `job_scraper/rubric.py` — pre-generated interest/fit rubrics via meta-rubric prompts
+- `job_scraper/prep.py` — pre-generated interest rubric and candidate brief
 - `job_scraper/surrogate.py` — TF-IDF + Ridge surrogate with bootstrap ensemble for active learning
 - `job_scraper/scorer.py` — Claude scoring with prompt caching and structured output (single combined call)
 - `job_scraper/companies/` — company context package (bundled `.md` files + `canonicalize`/`load_companies`)
@@ -91,9 +91,9 @@ Pre-commit hooks (run via `nix fmt` or `pre-commit run --all-files`):
 
 LLM scores are int 0-100 throughout. The surrogate model normalizes to [0, 1] internally via `score / 100`.
 
-## Rubrics
+## Prep artifacts
 
-Scoring uses pre-generated rubrics instead of raw preferences/resume in each scoring call:
-- **Interest rubric** — generated once from `(meta_rubric, preferences.md)`, cached in `rubrics.jsonl`
-- **Fit rubric** — generated per company from `(meta_rubric, resume.md, company_context)`, cached in `rubrics.jsonl`
-- `--rubric-model` controls the model used for rubric generation (default: sonnet)
+Scoring uses pre-generated artifacts instead of raw preferences/resume in each scoring call (cached in `prep.jsonl`):
+- **Interest rubric** — generated once from `(meta_prompt, preferences.md)`; includes candidate-specific scoring bands and weights
+- **Candidate brief** — generated once from `(meta_prompt, resume.md)`; factual summary of resume for recruiter assessment. Fit scoring structure (dimensions, weights, anchors) is hardcoded in `scorer.py`; company context injected at scoring time.
+- `--prep-model` controls the model used for prep generation (default: sonnet)

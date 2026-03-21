@@ -11,6 +11,7 @@ from anthropic.types import (
     JSONOutputFormatParam,
     OutputConfigParam,
     TextBlock,
+    TextBlockParam,
 )
 
 from job_scraper.cache import Cache
@@ -18,6 +19,8 @@ from job_scraper.companies import canonicalize
 from job_scraper.models import Job, Score
 
 logger = logging.getLogger(__name__)
+
+SystemBlocks = list[TextBlockParam]
 
 
 def _format_listing(job: Job) -> str:
@@ -50,15 +53,19 @@ def _schema_from_dataclass(cls: type) -> dict[str, Any]:
     }
 
 
-def _job_cache_key(system_prompt: str, job: Job) -> str:
+def _system_text(blocks: SystemBlocks) -> str:
+    return "\n".join(b["text"] for b in blocks)
+
+
+def _job_cache_key(system_blocks: SystemBlocks, job: Job) -> str:
     listing = _format_listing(job)
-    raw = f"{system_prompt}\n{listing}"
+    raw = f"{_system_text(system_blocks)}\n{listing}"
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 
 async def score[T](
     job: Job,
-    system: str,
+    system: SystemBlocks,
     client: anthropic.AsyncAnthropic,
     model: str,
     semaphore: asyncio.Semaphore,
@@ -72,13 +79,7 @@ async def score[T](
         response = await client.messages.create(
             model=model,
             max_tokens=4096,
-            system=[
-                {
-                    "type": "text",
-                    "text": system,
-                    "cache_control": {"type": "ephemeral"},
-                }
-            ],
+            system=system,
             messages=[{"role": "user", "content": user_msg}],
             output_config=OutputConfigParam(
                 format=JSONOutputFormatParam(
@@ -99,7 +100,7 @@ async def score_jobs[T](
     client: anthropic.AsyncAnthropic,
     model: str,
     cache: Cache,
-    system_prompt: str,
+    system: SystemBlocks,
     output_type: type[T],
     label: str = "score",
     max_concurrent: int = 10,
@@ -116,7 +117,7 @@ async def score_jobs[T](
 
     cache_keys: dict[str, str] = {}
     for job in jobs:
-        key = _job_cache_key(system_prompt, job)
+        key = _job_cache_key(system, job)
         cache_keys[job.hash] = key
 
         cached = cache.get(key)
@@ -142,7 +143,7 @@ async def score_jobs[T](
         try:
             result = await score(
                 job,
-                system_prompt,
+                system,
                 client,
                 model,
                 semaphore,
@@ -170,10 +171,47 @@ async def score_jobs[T](
     return results
 
 
+_FIT_SCORING = """\
+# Fit Scoring
+
+Assess how well the candidate fits this role from a recruiter's \
+perspective. Use the candidate brief and company context (if \
+provided) to evaluate each dimension. For each field, write a \
+1-2 sentence assessment, then provide a summary and integer \
+score 0-100.
+
+## Dimensions
+
+1. **demonstrated_experience** (25%) — Does the candidate have \
+professional experience doing what this role requires?
+2. **institutional_credibility** (15%) — Do the candidate's \
+employers, degrees, and affiliations signal credibility for \
+this role?
+3. **depth_vs_adjacency** (20%) — Is the candidate's experience \
+a direct match, or adjacent/transferable?
+4. **career_trajectory** (10%) — Is this role a natural next \
+step, or a significant pivot?
+5. **minimum_qualifications** (15%) — Does the candidate meet \
+stated requirements (years, technologies, degrees)?
+6. **seniority_alignment** (10%) — Does the candidate's level \
+match the role's level?
+7. **location_visa** (5%) — Can the candidate work where the \
+role requires?
+
+## Score anchors
+
+- 90-100: Immediately schedule a screen — strong demonstrated fit
+- 70-89: Likely advance — most requirements clearly met on paper
+- 40-69: Borderline — some gaps, worth considering if pool thin
+- 0-39: Would not advance — significant gaps
+"""
+
+
 async def score_combined(
     jobs: list[Job],
     interest_rubric: str,
-    fit_rubrics: dict[str, str],
+    candidate_brief: str,
+    companies: dict[str, str],
     client: anthropic.AsyncAnthropic,
     model: str,
     cache: Cache,
@@ -183,21 +221,35 @@ async def score_combined(
 
     Groups jobs by company so same-company jobs share a
     system prompt (and thus Anthropic prompt cache).
+    The shared prefix (rubric + scoring + brief) is marked
+    for caching so it's reused across companies.
     """
+    shared_prefix = (
+        "You are assessing a job posting from two "
+        "perspectives. For each field, write a 1-2 "
+        "sentence assessment, then provide a summary "
+        "and integer score 0-100.\n\n"
+        "# Interest Rubric\n\n" + interest_rubric
+        + "\n\n" + _FIT_SCORING
+        + "\n# Candidate Brief\n\n" + candidate_brief
+    )
 
-    def _system_for(company: str) -> str:
+    def _system_for(company: str) -> SystemBlocks:
         canonical = canonicalize(company)
-        fit = fit_rubrics.get(canonical, "")
-        return (
-            "You are assessing a job posting from two "
-            "perspectives. For each field, write a 1-2 "
-            "sentence assessment, then provide a summary "
-            "and integer score 0-100.\n\n"
-            "# Interest Rubric\n\n"
-            + interest_rubric
-            + "\n\n# Fit Rubric\n\n"
-            + fit
-        )
+        context = companies.get(canonical, "")
+        blocks: SystemBlocks = [
+            {
+                "type": "text",
+                "text": shared_prefix,
+                "cache_control": {"type": "ephemeral"},
+            },
+        ]
+        if context:
+            blocks.append({
+                "type": "text",
+                "text": "# Company Context\n\n" + context,
+            })
+        return blocks
 
     by_company: dict[str, list[Job]] = {}
     for job in jobs:
@@ -211,7 +263,7 @@ async def score_combined(
             client,
             model,
             cache,
-            system_prompt=_system_for(company),
+            system=_system_for(company),
             output_type=Score,
             label=f"score/{company}",
             max_concurrent=max_concurrent,

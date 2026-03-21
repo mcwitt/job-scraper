@@ -77,7 +77,7 @@ let
                 "--cache-dir ${userDir}/cache"
                 "--output-dir ${userDir}/output"
                 "--model ${s.model}"
-                "--rubric-model ${s.rubricModel}"
+                "--prep-model ${s.prepModel}"
                 "--top-k ${toString s.topK}"
                 "--dedup-fields ${s.dedupFields}"
                 "--max-concurrent-api ${toString s.maxConcurrentApi}"
@@ -142,10 +142,10 @@ in
         default = "claude-haiku-4-5-20251001";
         description = "Claude model for scoring.";
       };
-      rubricModel = mkOption {
+      prepModel = mkOption {
         type = types.str;
         default = "claude-sonnet-4-6";
-        description = "Claude model for rubric generation.";
+        description = "Claude model for prep generation.";
       };
       maxConcurrent = mkOption {
         type = types.int;

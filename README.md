@@ -61,8 +61,8 @@ python -m job_scraper.main --skip-score --keywords 'title:engineer AND location:
 # Full pipeline: scrape + filter + surrogate rank + score + report
 python -m job_scraper.main --keywords '(title:engineer OR title:scientist) NOT title:intern' --report
 
-# Customize scoring model and rubric generation model
-python -m job_scraper.main --model claude-haiku-4-5-20251001 --rubric-model claude-sonnet-4-6
+# Customize scoring model and prep generation model
+python -m job_scraper.main --model claude-haiku-4-5-20251001 --prep-model claude-sonnet-4-6
 
 # Keep only the top 50 jobs for LLM scoring (default: 200)
 python -m job_scraper.main --top-k 50
@@ -89,7 +89,7 @@ Output goes to `data/output/` by default:
 
 ## Architecture
 
-**Pipeline:** scrape → dedupe → keywords boolean filter → rubric generation → active learning (similarity seed / ensemble disagreement exploration) → surrogate ranking → LLM score top-k → sort → output
+**Pipeline:** scrape → dedupe → keywords boolean filter → prep generation → active learning (similarity seed / ensemble disagreement exploration) → surrogate ranking → LLM score top-k → sort → output
 
 ### Scraper discovery
 
@@ -102,7 +102,7 @@ Every `.py` file in `job_scraper/scraper/` whose name does not start with `_` is
 | `job_scraper/main.py` | CLI (Typer) and pipeline orchestration |
 | `job_scraper/relevance.py` | FTS5 boolean filtering against `keywords` |
 | `job_scraper/surrogate.py` | TF-IDF + Ridge surrogate with bootstrap ensemble for active learning |
-| `job_scraper/rubric.py` | Pre-generated interest/fit rubrics via meta-rubric prompts |
+| `job_scraper/prep.py` | Pre-generated interest rubric and candidate brief |
 | `job_scraper/scorer.py` | Claude scoring with prompt caching and structured output |
 | `job_scraper/cache.py` | JSONL append-log cache with TTL |
 | `job_scraper/models.py` | `Job` / `ScoredJob` frozen dataclasses |
@@ -148,11 +148,11 @@ Syntax: `"phrases"`, `AND`/`OR`/`NOT`, `(grouping)`. Prefix terms with `title:` 
 
 ### `preferences.md` — interest scoring
 
-Describes what you're looking for in your next role: target titles, ideal characteristics, hard constraints, and location preferences. A rubric-generation model reads this once to produce a candidate-specific interest rubric with concrete scoring bands. The rubric is then used to score each job consistently.
+Describes what you're looking for in your next role: target titles, ideal characteristics, hard constraints, and location preferences. The prep model reads this once to produce a candidate-specific interest rubric with concrete scoring bands. The rubric is then used to score each job consistently.
 
 ### `resume.md` — recruiter-fit scoring
 
-Your resume in Markdown. A rubric-generation model reads this once per company to produce a company-specific fit rubric. The rubric is then used to produce a **fit score** — how likely a recruiter would advance your application. This is scored independently from interest so you can see roles you'd love but might be a stretch, and roles you're qualified for but might not want.
+Your resume in Markdown. The prep model reads this once to produce a concise candidate brief — a factual distillation of your resume for recruiter assessment. The brief is then used alongside company context and hardcoded scoring dimensions to produce a **fit score** — how likely a recruiter would advance your application. This is scored independently from interest so you can see roles you'd love but might be a stretch, and roles you're qualified for but might not want.
 
 ## NixOS deployment
 
@@ -178,7 +178,7 @@ Add the flake as an input and import the module:
 
             settings = {
               model = "claude-haiku-4-5";
-              rubricModel = "claude-sonnet-4-6";
+              prepModel = "claude-sonnet-4-6";
               topK = 200;
               numActiveIters = 3;  # active learning iterations on cold start
             };
