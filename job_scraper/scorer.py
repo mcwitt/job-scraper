@@ -71,7 +71,7 @@ async def score[T](
     async with semaphore:
         response = await client.messages.create(
             model=model,
-            max_tokens=2048,
+            max_tokens=4096,
             system=[
                 {
                     "type": "text",
