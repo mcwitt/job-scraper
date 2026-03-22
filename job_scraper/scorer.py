@@ -53,94 +53,11 @@ def _schema_from_dataclass(cls: type) -> dict[str, Any]:
     }
 
 
-def _system_text(blocks: SystemBlocks) -> str:
-    return "\n".join(b["text"] for b in blocks)
-
-
 def _job_cache_key(system_blocks: SystemBlocks, job: Job) -> str:
+    system_text = "\n".join(b["text"] for b in system_blocks)
     listing = _format_listing(job)
-    raw = f"{_system_text(system_blocks)}\n{listing}"
+    raw = f"{system_text}\n{listing}"
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
-
-
-async def score[T](
-    job: Job,
-    system: SystemBlocks,
-    client: anthropic.AsyncAnthropic,
-    model: str,
-    semaphore: asyncio.Semaphore,
-    output_type: type[T],
-    output_schema: dict[str, Any],
-    cache: Cache,
-) -> T:
-    """Score a single job via one API call (with cache)."""
-    user_msg = f"## Job Listing\n\n{_format_listing(job)}"
-    cache_key = _job_cache_key(system, job)
-
-    text = await create(
-        client,
-        model,
-        cache,
-        cache_key,
-        semaphore,
-        system=system,
-        messages=[{"role": "user", "content": user_msg}],
-        output_config=OutputConfigParam(
-            format=JSONOutputFormatParam(
-                type="json_schema",
-                schema=output_schema,
-            ),
-        ),
-    )
-    return dacite.from_dict(output_type, json.loads(text))
-
-
-async def score_jobs[T](
-    jobs: list[Job],
-    client: anthropic.AsyncAnthropic,
-    model: str,
-    cache: Cache,
-    system: SystemBlocks,
-    output_type: type[T],
-    label: str = "score",
-    max_concurrent: int = 10,
-) -> dict[str, T]:
-    """Score jobs one-per-request, with transparent caching.
-
-    Returns:
-        Dict mapping job hash to typed dataclass instance.
-    """
-    output_schema = _schema_from_dataclass(output_type)
-    semaphore = asyncio.Semaphore(max_concurrent)
-    results: dict[str, T] = {}
-
-    logger.info("%s jobs=%d", label, len(jobs))
-
-    async def score_one(job: Job) -> None:
-        try:
-            result = await score(
-                job,
-                system,
-                client,
-                model,
-                semaphore,
-                output_type,
-                output_schema,
-                cache,
-            )
-            results[job.hash] = result
-        except Exception:
-            logger.warning(
-                "score failed job=%s title=%r company=%s",
-                job.hash[:12],
-                job.title,
-                job.company,
-                exc_info=True,
-            )
-
-    await asyncio.gather(*(score_one(job) for job in jobs))
-
-    return results
 
 
 _FIT_SCORING = """\
@@ -189,13 +106,7 @@ async def score_combined(
     cache: Cache,
     max_concurrent: int = 10,
 ) -> dict[str, Score]:
-    """Score jobs using pre-generated rubrics.
-
-    Groups jobs by company so same-company jobs share a
-    system prompt (and thus Anthropic prompt cache).
-    The shared prefix (rubric + scoring + brief) is marked
-    for caching so it's reused across companies.
-    """
+    """Score jobs using pre-generated rubric and candidate brief."""
     shared_prefix = (
         "You are assessing a job posting from two "
         "perspectives. For each field, write a 1-2 "
@@ -223,27 +134,46 @@ async def score_combined(
             })
         return blocks
 
-    by_company: dict[str, list[Job]] = {}
-    for job in jobs:
-        by_company.setdefault(job.company, []).append(job)
+    schema = _schema_from_dataclass(Score)
+    semaphore = asyncio.Semaphore(max_concurrent)
+    results: dict[str, Score] = {}
 
-    all_results: dict[str, Score] = {}
+    logger.info("score jobs=%d", len(jobs))
 
-    results_list = await asyncio.gather(*(
-        score_jobs(
-            company_jobs,
-            client,
-            model,
-            cache,
-            system=_system_for(company),
-            output_type=Score,
-            label=f"score/{company}",
-            max_concurrent=max_concurrent,
-        )
-        for company, company_jobs in by_company.items()
-    ))
+    async def score_one(job: Job) -> None:
+        system = _system_for(job.company)
+        user_msg = f"## Job Listing\n\n{_format_listing(job)}"
+        cache_key = _job_cache_key(system, job)
+        try:
+            text = await create(
+                client,
+                model,
+                cache,
+                cache_key,
+                semaphore,
+                system=system,
+                messages=[
+                    {"role": "user", "content": user_msg}
+                ],
+                output_config=OutputConfigParam(
+                    format=JSONOutputFormatParam(
+                        type="json_schema",
+                        schema=schema,
+                    ),
+                ),
+            )
+            results[job.hash] = dacite.from_dict(
+                Score, json.loads(text)
+            )
+        except Exception:
+            logger.warning(
+                "score failed job=%s title=%r company=%s",
+                job.hash[:12],
+                job.title,
+                job.company,
+                exc_info=True,
+            )
 
-    for results in results_list:
-        all_results.update(results)
+    await asyncio.gather(*(score_one(job) for job in jobs))
 
-    return all_results
+    return results
