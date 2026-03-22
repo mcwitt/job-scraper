@@ -3,9 +3,9 @@ import hashlib
 import logging
 
 import anthropic
-from anthropic.types import TextBlock
 
 from job_scraper.cache import Cache
+from job_scraper.llm import create
 
 logger = logging.getLogger(__name__)
 
@@ -102,55 +102,6 @@ def _cache_key(text: str) -> str:
     return hashlib.sha256(text.encode()).hexdigest()[:16]
 
 
-async def _generate(
-    system: str,
-    user: str,
-    client: anthropic.AsyncAnthropic,
-    model: str,
-    semaphore: asyncio.Semaphore,
-) -> str:
-    async with semaphore:
-        response = await client.messages.create(
-            model=model,
-            max_tokens=4096,
-            system=system,
-            messages=[{"role": "user", "content": user}],
-        )
-    text_block = next(
-        b for b in response.content if isinstance(b, TextBlock)
-    )
-    return text_block.text
-
-
-async def _generate_cached(
-    label: str,
-    system_instruction: str,
-    meta: str,
-    input_text: str,
-    client: anthropic.AsyncAnthropic,
-    model: str,
-    cache: Cache,
-    semaphore: asyncio.Semaphore,
-) -> str:
-    key = _cache_key(meta + input_text)
-    cached = cache.get(key)
-    if cached is not None:
-        logger.info("%s cached", label)
-        return cached["text"]
-
-    logger.info("generating %s model=%s", label, model)
-    text = await _generate(
-        system_instruction,
-        meta + input_text,
-        client,
-        model,
-        semaphore,
-    )
-    cache.put(key, {"text": text})
-    logger.info("generated %s len=%d", label, len(text))
-    return text
-
-
 async def generate_interest_rubric(
     preferences: str,
     client: anthropic.AsyncAnthropic,
@@ -158,15 +109,18 @@ async def generate_interest_rubric(
     cache: Cache,
     semaphore: asyncio.Semaphore,
 ) -> str:
-    return await _generate_cached(
-        "interest rubric",
-        "Generate a candidate-specific interest scoring rubric.",
-        _INTEREST_META,
-        preferences,
+    key = _cache_key(_INTEREST_META + preferences)
+    logger.info("interest rubric key=%s", key)
+    return await create(
         client,
         model,
         cache,
+        key,
         semaphore,
+        system="Generate a candidate-specific interest scoring rubric.",
+        messages=[
+            {"role": "user", "content": _INTEREST_META + preferences}
+        ],
     )
 
 
@@ -177,13 +131,16 @@ async def generate_candidate_brief(
     cache: Cache,
     semaphore: asyncio.Semaphore,
 ) -> str:
-    return await _generate_cached(
-        "candidate brief",
-        "Distill a candidate resume into a recruiter brief.",
-        _BRIEF_META,
-        resume,
+    key = _cache_key(_BRIEF_META + resume)
+    logger.info("candidate brief key=%s", key)
+    return await create(
         client,
         model,
         cache,
+        key,
         semaphore,
+        system="Distill a candidate resume into a recruiter brief.",
+        messages=[
+            {"role": "user", "content": _BRIEF_META + resume}
+        ],
     )

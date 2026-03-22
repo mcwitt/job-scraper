@@ -10,12 +10,12 @@ import dacite
 from anthropic.types import (
     JSONOutputFormatParam,
     OutputConfigParam,
-    TextBlock,
     TextBlockParam,
 )
 
 from job_scraper.cache import Cache
 from job_scraper.companies import canonicalize
+from job_scraper.llm import create
 from job_scraper.models import Job, Score
 
 logger = logging.getLogger(__name__)
@@ -71,28 +71,28 @@ async def score[T](
     semaphore: asyncio.Semaphore,
     output_type: type[T],
     output_schema: dict[str, Any],
+    cache: Cache,
 ) -> T:
-    """Score a single job via one API call."""
+    """Score a single job via one API call (with cache)."""
     user_msg = f"## Job Listing\n\n{_format_listing(job)}"
+    cache_key = _job_cache_key(system, job)
 
-    async with semaphore:
-        response = await client.messages.create(
-            model=model,
-            max_tokens=4096,
-            system=system,
-            messages=[{"role": "user", "content": user_msg}],
-            output_config=OutputConfigParam(
-                format=JSONOutputFormatParam(
-                    type="json_schema",
-                    schema=output_schema,
-                ),
+    text = await create(
+        client,
+        model,
+        cache,
+        cache_key,
+        semaphore,
+        system=system,
+        messages=[{"role": "user", "content": user_msg}],
+        output_config=OutputConfigParam(
+            format=JSONOutputFormatParam(
+                type="json_schema",
+                schema=output_schema,
             ),
-        )
-
-    text_block = next(
-        b for b in response.content if isinstance(b, TextBlock)
+        ),
     )
-    return dacite.from_dict(output_type, json.loads(text_block.text))
+    return dacite.from_dict(output_type, json.loads(text))
 
 
 async def score_jobs[T](
@@ -105,7 +105,7 @@ async def score_jobs[T](
     label: str = "score",
     max_concurrent: int = 10,
 ) -> dict[str, T]:
-    """Score jobs one-per-request, using cache to skip already-scored.
+    """Score jobs one-per-request, with transparent caching.
 
     Returns:
         Dict mapping job hash to typed dataclass instance.
@@ -113,31 +113,8 @@ async def score_jobs[T](
     output_schema = _schema_from_dataclass(output_type)
     semaphore = asyncio.Semaphore(max_concurrent)
     results: dict[str, T] = {}
-    to_score: list[Job] = []
 
-    cache_keys: dict[str, str] = {}
-    for job in jobs:
-        key = _job_cache_key(system, job)
-        cache_keys[job.hash] = key
-
-        cached = cache.get(key)
-        if cached is not None:
-            results[job.hash] = dacite.from_dict(
-                output_type, cached
-            )
-        else:
-            to_score.append(job)
-
-    if not to_score:
-        logger.info("%s all cached count=%d", label, len(results))
-        return results
-
-    logger.info(
-        "%s jobs=%d cached=%d",
-        label,
-        len(to_score),
-        len(results),
-    )
+    logger.info("%s jobs=%d", label, len(jobs))
 
     async def score_one(job: Job) -> None:
         try:
@@ -149,12 +126,9 @@ async def score_jobs[T](
                 semaphore,
                 output_type,
                 output_schema,
+                cache,
             )
             results[job.hash] = result
-            cache.put(
-                cache_keys[job.hash],
-                dataclasses.asdict(result),  # type: ignore[arg-type]
-            )
         except Exception:
             logger.warning(
                 "score failed job=%s title=%r company=%s",
@@ -164,9 +138,7 @@ async def score_jobs[T](
                 exc_info=True,
             )
 
-    await asyncio.gather(*(
-        score_one(job) for job in to_score
-    ))
+    await asyncio.gather(*(score_one(job) for job in jobs))
 
     return results
 
