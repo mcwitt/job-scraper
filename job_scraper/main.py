@@ -237,9 +237,8 @@ async def _run(
     from job_scraper.companies import load_companies
     from job_scraper.models import Score, ScoredJob
     from job_scraper.surrogate import (
-        append_examples,
+        TrainingData,
         job_to_example,
-        load_examples,
         predict,
         rank_agreement,
         seed_by_similarity,
@@ -287,6 +286,12 @@ async def _run(
             ),
         )
 
+    training = TrainingData(
+        cache_dir / "surrogate_training.jsonl",
+        interest_rubric,
+        candidate_brief,
+    )
+
     def _to_examples(
         jobs: list[Job],
         results: dict[str, Score],
@@ -303,15 +308,13 @@ async def _run(
             and (exclude is None or job.hash not in exclude)
         ]
 
-    training_path = cache_dir / "surrogate_training.jsonl"
-    examples = load_examples(training_path)
-    scored_hashes = {ex.hash for ex in examples}
-
     # Partition into already-scored and unscored
     unscored = [
-        j for j in filtered_jobs if j.hash not in scored_hashes
+        j
+        for j in filtered_jobs
+        if j.hash not in training.scored_hashes
     ]
-    cold_start = len(examples) == 0
+    cold_start = len(training.examples) == 0
 
     reference = preferences_text + "\n\n" + resume_text
 
@@ -320,7 +323,6 @@ async def _run(
         async def _score_and_learn(
             batch: list[Job],
         ) -> None:
-            nonlocal examples
             if not batch:
                 return
             results = await score_combined(
@@ -336,18 +338,14 @@ async def _run(
             new_examples = _to_examples(
                 batch, results
             )
-            append_examples(training_path, new_examples)
-            examples = examples + new_examples
-            scored_hashes.update(
-                ex.hash for ex in new_examples
-            )
+            training.append(new_examples)
             logger.info(
                 "scored=%d total_training=%d",
                 len(new_examples),
-                len(examples),
+                len(training.examples),
             )
 
-        scored_before = len(scored_hashes)
+        scored_before = len(training.scored_hashes)
 
         if cold_start:
             # Phase 1: Seed by similarity
@@ -365,7 +363,7 @@ async def _run(
                 unscored = [
                     j
                     for j in filtered_jobs
-                    if j.hash not in scored_hashes
+                    if j.hash not in training.scored_hashes
                 ]
                 if not unscored:
                     logger.info(
@@ -377,7 +375,7 @@ async def _run(
                     len(unscored),
                 )
                 vec, _, ensemble, iter_metrics = train(
-                    examples
+                    training.examples
                 )
                 logger.info(
                     "active learning iter=%d r2=%.4f"
@@ -398,7 +396,9 @@ async def _run(
             logger.info(
                 "warm start: unscored=%d", len(unscored)
             )
-            vec, _, ensemble, warm_metrics = train(examples)
+            vec, _, ensemble, warm_metrics = train(
+                training.examples
+            )
             logger.info(
                 "warm start: r2=%.4f spearman=%.4f",
                 warm_metrics.cv_r2,
@@ -412,15 +412,17 @@ async def _run(
             )
             await _score_and_learn(explore)
 
-        scored_during = len(scored_hashes) - scored_before
+        scored_during = len(training.scored_hashes) - scored_before
         logger.info(
             "exploration complete: scored=%d total_training=%d",
             scored_during,
-            len(examples),
+            len(training.examples),
         )
 
         # Final train + rank
-        vectorizer, ridge, _, cv_metrics = train(examples)
+        vectorizer, ridge, _, cv_metrics = train(
+            training.examples
+        )
 
         surrogate_scores = predict(
             (vectorizer, ridge), filtered_jobs
@@ -468,10 +470,10 @@ async def _run(
 
         # Append newly scored (not in explore batch) to training data
         newly_scored = _to_examples(
-            top_jobs, topk_results, exclude=scored_hashes
+            top_jobs, topk_results, exclude=training.scored_hashes
         )
         if newly_scored:
-            append_examples(training_path, newly_scored)
+            training.append(newly_scored)
             logger.info(
                 "appended top-k training examples count=%d",
                 len(newly_scored),

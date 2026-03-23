@@ -1,3 +1,4 @@
+import hashlib
 import json
 import logging
 from dataclasses import asdict, dataclass
@@ -55,35 +56,76 @@ def job_to_example(
     )
 
 
-def load_examples(path: Path) -> list[Example]:
-    try:
-        f = path.open()
-    except FileNotFoundError:
-        return []
-    examples: list[Example] = []
-    with f:
-        for line in f:
-            d = json.loads(line)
-            examples.append(Example(**d))
-    logger.info(
-        "loaded training examples count=%d path=%s",
-        len(examples),
-        path,
-    )
-    return examples
+class TrainingData:
+    """Fingerprint-gated training data store.
 
+    If the prep artifacts change (rubric/brief updated),
+    existing examples are discarded automatically.
+    """
 
-def append_examples(
-    path: Path, examples: list[Example]
-) -> None:
-    with path.open("a") as f:
-        for ex in examples:
-            f.write(json.dumps(asdict(ex)) + "\n")
-    logger.info(
-        "appended training examples count=%d path=%s",
-        len(examples),
-        path,
-    )
+    def __init__(
+        self,
+        path: Path,
+        interest_rubric: str,
+        candidate_brief: str,
+    ) -> None:
+        self._path = path
+        self._fingerprint = hashlib.sha256(
+            (interest_rubric + "\n" + candidate_brief).encode()
+        ).hexdigest()[:16]
+        self.examples: list[Example] = []
+        self.scored_hashes: set[str] = set()
+        self._load()
+
+    def _load(self) -> None:
+        try:
+            f = self._path.open()
+        except FileNotFoundError:
+            return
+        with f:
+            lines = f.read().splitlines()
+        if not lines:
+            return
+        header = json.loads(lines[0])
+        if header.get("_fingerprint") != self._fingerprint:
+            logger.info(
+                "prep fingerprint changed, discarding"
+                " training data path=%s",
+                self._path,
+            )
+            self._path.unlink(missing_ok=True)
+            return
+        for line in lines[1:]:
+            ex = Example(**json.loads(line))
+            self.examples.append(ex)
+            self.scored_hashes.add(ex.hash)
+        logger.info(
+            "loaded training examples count=%d path=%s",
+            len(self.examples),
+            self._path,
+        )
+
+    def append(self, new: list[Example]) -> None:
+        if not new:
+            return
+        write_header = not self._path.exists()
+        with self._path.open("a") as f:
+            if write_header:
+                f.write(
+                    json.dumps(
+                        {"_fingerprint": self._fingerprint}
+                    )
+                    + "\n"
+                )
+            for ex in new:
+                f.write(json.dumps(asdict(ex)) + "\n")
+        self.examples.extend(new)
+        self.scored_hashes.update(ex.hash for ex in new)
+        logger.info(
+            "appended training examples count=%d path=%s",
+            len(new),
+            self._path,
+        )
 
 
 def _text(obj: Job | Example) -> str:
