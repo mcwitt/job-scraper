@@ -651,7 +651,7 @@ def run(
         typer.Option(
             help="Jobs to seed by similarity for cold start"
         ),
-    ] = 200,
+    ] = 100,
     num_explore: Annotated[
         int,
         typer.Option(

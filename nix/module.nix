@@ -170,7 +170,7 @@ in
       };
       initNumExploit = mkOption {
         type = types.int;
-        default = 200;
+        default = 100;
         description = "Jobs to seed by similarity for cold start.";
       };
       numExplore = mkOption {
