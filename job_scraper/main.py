@@ -7,7 +7,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
 if TYPE_CHECKING:
+    import anthropic
+
+    from job_scraper.models import Score, ScoredJob
     from job_scraper.status import SourceStatus
+    from job_scraper.surrogate import Example, Metrics
 
 import dacite
 import httpx
@@ -147,13 +151,179 @@ async def _scrape(
     _status.save(status_path, statuses)
     logger.info("saved scraper status path=%s", status_path)
 
-    raw_path = output_dir / "jobs_raw.jsonl"
-    with raw_path.open("w") as f:
-        for job in all_jobs:
-            f.write(json.dumps(to_dict(job)) + "\n")
-    logger.info("wrote raw jobs count=%d path=%s", len(all_jobs), raw_path)
+    _write_jsonl(all_jobs, output_dir / "jobs_raw.jsonl")
 
     return all_jobs, statuses
+
+
+def _dedup_and_filter(
+    jobs: list[Job],
+    dedup_fields: tuple[str, ...],
+    keywords: str | None,
+) -> list[Job]:
+    """Dedup and keyword-filter jobs (pure)."""
+    deduped = _dedup(jobs, dedup_fields)
+    if not keywords:
+        return deduped
+    filtered = filter_relevant(keywords, deduped)
+    logger.info(
+        "keyword filter total=%d matched=%d",
+        len(deduped),
+        len(filtered),
+    )
+    return filtered
+
+
+def _write_jsonl(
+    data: list[Job] | list["ScoredJob"], path: Path
+) -> None:
+    with path.open("w") as f:
+        for item in data:
+            f.write(json.dumps(to_dict(item)) + "\n")
+    logger.info("wrote count=%d path=%s", len(data), path)
+
+
+def _unscored_jobs(
+    jobs: list[Job], scored_hashes: set[str]
+) -> list[Job]:
+    return [j for j in jobs if j.hash not in scored_hashes]
+
+
+def _score_to_examples(
+    jobs: list[Job], results: dict[str, "Score"]
+) -> list["Example"]:
+    from job_scraper.surrogate import job_to_example
+
+    return [
+        job_to_example(
+            job,
+            results[job.hash].interest.score,
+            results[job.hash].fit.score,
+        )
+        for job in jobs
+        if job.hash in results
+    ]
+
+
+def _priority(j: "ScoredJob") -> float:
+    return (j.score_interest.score / 100) * (
+        j.score_fit.score / 100
+    )
+
+
+def _collect_scored_jobs(
+    jobs: list[Job], results: dict[str, "Score"]
+) -> list["ScoredJob"]:
+    """Build sorted ScoredJob list from jobs and scores (pure)."""
+    from job_scraper.models import ScoredJob
+
+    scored = [
+        ScoredJob(
+            **to_dict(job),
+            score_interest=data.interest,
+            score_fit=data.fit,
+        )
+        for job in jobs
+        if (data := results.get(job.hash)) is not None
+    ]
+    return sorted(scored, key=_priority, reverse=True)
+
+
+def _compute_agreement(
+    examples: list["Example"],
+    surrogate_by_hash: dict[str, float],
+) -> tuple[float | None, int]:
+    """Surrogate vs LLM rank agreement (pure)."""
+    from job_scraper.surrogate import rank_agreement
+
+    actual, predicted = [], []
+    for ex in examples:
+        if ex.hash in surrogate_by_hash:
+            actual.append(
+                (ex.interest_score / 100) * (ex.fit_score / 100)
+            )
+            predicted.append(surrogate_by_hash[ex.hash])
+    return rank_agreement(actual, predicted), len(actual)
+
+
+def _write_surrogate_output(
+    filtered_jobs: list[Job],
+    surrogate_scores: list[float],
+    examples: list["Example"],
+    cv_metrics: "Metrics",
+    cache_dir: Path,
+    output_dir: Path,
+) -> None:
+    """Write surrogate scores, compute agreement, persist metrics."""
+    surrogate_path = output_dir / "jobs_surrogate.jsonl"
+    surrogate_by_hash: dict[str, float] = {}
+    with surrogate_path.open("w") as f:
+        for job, s in zip(
+            filtered_jobs, surrogate_scores, strict=True
+        ):
+            surrogate_by_hash[job.hash] = s
+            d = to_dict(job)
+            d["surrogate_score"] = round(s, 6)
+            f.write(json.dumps(d) + "\n")
+    logger.info(
+        "wrote surrogate scores count=%d path=%s",
+        len(filtered_jobs),
+        surrogate_path,
+    )
+    agreement, n = _compute_agreement(
+        examples, surrogate_by_hash
+    )
+    if agreement is not None:
+        logger.info(
+            "surrogate agreement n=%d spearman=%.4f",
+            n,
+            agreement,
+        )
+
+    # Metrics
+    metrics_path = cache_dir / "surrogate_metrics.jsonl"
+    metrics_record = {
+        "timestamp": datetime.now(UTC).isoformat(),
+        **to_dict(cv_metrics),
+        "agreement_spearman": agreement,
+        "agreement_n": n,
+    }
+    with metrics_path.open("a") as f:
+        f.write(json.dumps(metrics_record) + "\n")
+    logger.info("wrote surrogate metrics path=%s", metrics_path)
+
+
+async def _generate_prep(
+    preferences_text: str,
+    resume_text: str,
+    client: "anthropic.AsyncAnthropic",
+    prep_model: str,
+    cache_dir: Path,
+    max_concurrent_api: int,
+) -> tuple[str, str]:
+    from job_scraper.prep import (
+        generate_candidate_brief,
+        generate_interest_rubric,
+    )
+
+    semaphore = asyncio.Semaphore(max_concurrent_api)
+    async with open_cache(cache_dir / "prep.jsonl") as cache:
+        return await asyncio.gather(
+            generate_interest_rubric(
+                preferences_text,
+                client,
+                prep_model,
+                cache,
+                semaphore,
+            ),
+            generate_candidate_brief(
+                resume_text,
+                client,
+                prep_model,
+                cache,
+                semaphore,
+            ),
+        )
 
 
 async def _run(
@@ -186,62 +356,44 @@ async def _run(
 
     # --- Obtain raw jobs ---
     if input_jobs is not None:
-        all_jobs = _load_jobs(input_jobs)
+        raw_jobs = _load_jobs(input_jobs)
     else:
-        all_jobs, statuses = await _scrape(
+        raw_jobs, statuses = await _scrape(
             cache_dir, output_dir, scrape_ttl, max_concurrent,
             only=only, exclude=exclude,
         )
         if status_report:
-            from job_scraper.status_report import render_status_report
+            from job_scraper.status_report import (
+                render_status_report,
+            )
 
             report_path = output_dir / "status.html"
             render_status_report(statuses, report_path)
-            logger.info("wrote status report path=%s", report_path)
+            logger.info(
+                "wrote status report path=%s", report_path
+            )
         if scrape_only:
             return
 
-    if not all_jobs:
+    if not raw_jobs:
         logger.warning("no jobs to process")
         return
 
-    output_path = output_dir / "jobs.jsonl"
-
-    # --- Dedup (before filtering) ---
-    all_jobs = _dedup(all_jobs, dedup_fields)
-
-    # --- Keywords boolean filter ---
-    if keywords:
-        filtered_jobs = filter_relevant(keywords, all_jobs)
-        logger.info(
-            "keyword filter total=%d matched=%d",
-            len(all_jobs),
-            len(filtered_jobs),
-        )
-    else:
-        filtered_jobs = all_jobs
+    # --- Prepare: dedup + keyword filter ---
+    filtered = _dedup_and_filter(raw_jobs, dedup_fields, keywords)
 
     if skip_score:
-        with output_path.open("w") as f:
-            for job in filtered_jobs:
-                f.write(json.dumps(to_dict(job)) + "\n")
-        logger.info(
-            "wrote jobs count=%d path=%s",
-            len(filtered_jobs),
-            output_path,
-        )
+        _write_jsonl(filtered, output_dir / "jobs.jsonl")
         return
 
-    # --- Surrogate-guided scoring ---
+    # --- Prep artifacts ---
     import anthropic
 
     from job_scraper.companies import load_companies
-    from job_scraper.models import Score, ScoredJob
+    from job_scraper.scorer import score_combined
     from job_scraper.surrogate import (
         TrainingData,
-        job_to_example,
         predict,
-        rank_agreement,
         seed_by_similarity,
         select_by_disagreement,
         select_by_score,
@@ -258,71 +410,31 @@ async def _run(
     companies = load_companies()
     client = anthropic.AsyncAnthropic()
 
-    # --- Generate prep artifacts ---
-    from job_scraper.prep import (
-        generate_candidate_brief,
-        generate_interest_rubric,
+    interest_rubric, candidate_brief = await _generate_prep(
+        preferences_text,
+        resume_text,
+        client,
+        prep_model,
+        cache_dir,
+        max_concurrent_api,
     )
-    from job_scraper.scorer import score_combined
 
-    prep_cache_path = cache_dir / "prep.jsonl"
-    score_cache_path = cache_dir / "score.jsonl"
-
-    prep_semaphore = asyncio.Semaphore(max_concurrent_api)
-
-    async with open_cache(prep_cache_path) as prep_cache:
-        interest_rubric, candidate_brief = await asyncio.gather(
-            generate_interest_rubric(
-                preferences_text,
-                client,
-                prep_model,
-                prep_cache,
-                prep_semaphore,
-            ),
-            generate_candidate_brief(
-                resume_text,
-                client,
-                prep_model,
-                prep_cache,
-                prep_semaphore,
-            ),
-        )
-
+    # --- Active learning ---
     training = TrainingData(
         cache_dir / "surrogate_training.jsonl",
         interest_rubric,
         candidate_brief,
     )
-
-    def _to_examples(
-        jobs: list[Job],
-        results: dict[str, Score],
-    ) -> list:
-        return [
-            job_to_example(
-                job,
-                results[job.hash].interest.score,
-                results[job.hash].fit.score,
-            )
-            for job in jobs
-            if job.hash in results
-        ]
-
     cold_start = len(training.examples) == 0
     reference = preferences_text + "\n\n" + resume_text
+    scored_before = len(training.scored_hashes)
 
-    def _unscored() -> list[Job]:
-        return [
-            j
-            for j in filtered_jobs
-            if j.hash not in training.scored_hashes
-        ]
-
+    score_cache_path = cache_dir / "score.jsonl"
     async with open_cache(score_cache_path) as score_cache:
 
         async def _score(
             batch: list[Job],
-        ) -> dict[str, Score]:
+        ) -> dict[str, "Score"]:
             return await score_combined(
                 batch,
                 interest_rubric,
@@ -334,34 +446,38 @@ async def _run(
                 max_concurrent=max_concurrent_api,
             )
 
-        scored_before = len(training.scored_hashes)
-
         # Cold start: seed by similarity to user profile
         if cold_start:
-            seed_sample = seed_by_similarity(
-                _unscored(), reference, init_num_exploit
+            seed = seed_by_similarity(
+                _unscored_jobs(
+                    filtered, training.scored_hashes
+                ),
+                reference,
+                init_num_exploit,
             )
             logger.info(
                 "cold start: seeding with %d similar jobs",
-                len(seed_sample),
+                len(seed),
             )
-            results = await _score(seed_sample)
-            training.append(_to_examples(seed_sample, results))
+            results = await _score(seed)
+            training.append(_score_to_examples(seed, results))
 
-        # Active learning loop (shared by cold and warm start)
+        # Explore/exploit loop
         n_iters = (
             init_learning_iters if cold_start else learning_iters
         )
         for iteration in range(n_iters):
-            unscored = _unscored()
+            unscored = _unscored_jobs(
+                filtered, training.scored_hashes
+            )
             if not unscored:
                 logger.info(
                     "active learning: no unscored jobs remain"
                 )
                 break
 
-            # Explore: score high-disagreement examples
-            vec, ridge, ensemble, iter_metrics = train(
+            # Explore: high-disagreement examples
+            vec, ridge, ensemble, metrics = train(
                 training.examples
             )
             logger.info(
@@ -370,34 +486,38 @@ async def _run(
                 iteration + 1,
                 n_iters,
                 len(unscored),
-                iter_metrics.cv_r2,
-                iter_metrics.cv_spearman,
+                metrics.cv_r2,
+                metrics.cv_spearman,
             )
-            explore_batch = select_by_disagreement(
+            explore = select_by_disagreement(
                 vec,
                 ensemble,
                 unscored,
                 min(num_explore, len(unscored)),
             )
-            results = await _score(explore_batch)
-            training.append(_to_examples(explore_batch, results))
+            results = await _score(explore)
+            training.append(
+                _score_to_examples(explore, results)
+            )
 
-            # Exploit: score highest-predicted examples
-            unscored = _unscored()
+            # Exploit: highest-predicted examples
+            unscored = _unscored_jobs(
+                filtered, training.scored_hashes
+            )
             if not unscored:
                 break
             vec, ridge, ensemble, _ = train(
                 training.examples
             )
-            exploit_batch = select_by_score(
+            exploit = select_by_score(
                 vec,
                 ridge,
                 unscored,
                 min(num_exploit, len(unscored)),
             )
-            results = await _score(exploit_batch)
+            results = await _score(exploit)
             training.append(
-                _to_examples(exploit_batch, results)
+                _score_to_examples(exploit, results)
             )
 
         scored_during = (
@@ -409,112 +529,32 @@ async def _run(
             len(training.examples),
         )
 
-        # Final train + surrogate scores for all jobs
+        # --- Surrogate output ---
         vectorizer, ridge, _, cv_metrics = train(
             training.examples
         )
-
         surrogate_scores = predict(
-            (vectorizer, ridge), filtered_jobs
+            (vectorizer, ridge), filtered
         )
-        surrogate_path = output_dir / "jobs_surrogate.jsonl"
-        with surrogate_path.open("w") as f:
-            for job, s in zip(
-                filtered_jobs, surrogate_scores, strict=True
-            ):
-                d = to_dict(job)
-                d["surrogate_score"] = round(s, 6)
-                f.write(json.dumps(d) + "\n")
-        logger.info(
-            "wrote surrogate scores count=%d path=%s",
-            len(filtered_jobs),
-            surrogate_path,
+        _write_surrogate_output(
+            filtered,
+            surrogate_scores,
+            training.examples,
+            cv_metrics,
+            cache_dir,
+            output_dir,
         )
 
-        # Agreement: surrogate vs LLM on all scored jobs
-        surr_by_hash = {
-            j.hash: s
-            for j, s in zip(
-                filtered_jobs, surrogate_scores, strict=True
-            )
-        }
-        scored_surr, scored_actual = [], []
-        for ex in training.examples:
-            if ex.hash in surr_by_hash:
-                scored_surr.append(surr_by_hash[ex.hash])
-                scored_actual.append(
-                    (ex.interest_score / 100)
-                    * (ex.fit_score / 100)
-                )
-
-        agreement = rank_agreement(scored_actual, scored_surr)
-        if agreement is not None:
-            logger.info(
-                "surrogate agreement n=%d spearman=%.4f",
-                len(scored_surr),
-                agreement,
-            )
-
-        # Persist metrics
-        metrics_path = cache_dir / "surrogate_metrics.jsonl"
-        metrics_record = {
-            "timestamp": datetime.now(UTC).isoformat(),
-            **to_dict(cv_metrics),
-            "agreement_spearman": agreement,
-            "agreement_n": len(scored_surr),
-        }
-        with metrics_path.open("a") as f:
-            f.write(json.dumps(metrics_record) + "\n")
-        logger.info(
-            "wrote surrogate metrics path=%s", metrics_path
-        )
-
-        # Retrieve full scores for all LLM-scored jobs (cache hits)
+        # --- Collect full scores (cache hits) ---
         scored_jobs = [
             j
-            for j in filtered_jobs
+            for j in filtered
             if j.hash in training.scored_hashes
         ]
-        all_results = await score_combined(
-            scored_jobs,
-            interest_rubric,
-            candidate_brief,
-            companies,
-            client,
-            model,
-            score_cache,
-            max_concurrent=max_concurrent_api,
-        )
+        all_results = await _score(scored_jobs)
 
-    scored = []
-    for job in scored_jobs:
-        data = all_results.get(job.hash)
-        if data is None:
-            continue
-        scored.append(
-            ScoredJob(
-                **to_dict(job),
-                score_interest=data.interest,
-                score_fit=data.fit,
-            )
-        )
-
-    # Sort by priority (candidate * recruiter) descending
-    def _priority(j: ScoredJob) -> float:
-        return (j.score_interest.score / 100) * (
-            j.score_fit.score / 100
-        )
-
-    scored.sort(key=_priority, reverse=True)
-
-    with output_path.open("w") as f:
-        for job in scored:
-            f.write(json.dumps(to_dict(job)) + "\n")
-    logger.info(
-        "wrote scored jobs count=%d path=%s",
-        len(scored),
-        output_path,
-    )
+    scored = _collect_scored_jobs(scored_jobs, all_results)
+    _write_jsonl(scored, output_dir / "jobs.jsonl")
 
     if report:
         from job_scraper.linkedin import load as load_linkedin

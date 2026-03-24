@@ -48,7 +48,13 @@
                   enable = true;
                   package = pkgs.pyrefly;
                   entry = "${lib.getExe config.package} check --python-interpreter-path ${
-                    pkgs.python3.withPackages (_: self.packages.${system}.default.dependencies)
+                    pkgs.python3.withPackages (
+                      _:
+                      let
+                        inherit (self.packages.${system}.default) dependencies optional-dependencies;
+                      in
+                      dependencies ++ optional-dependencies.test
+                    )
                   }/bin/python3";
                   types = [ "python" ];
                 }
@@ -65,24 +71,55 @@
           pkgs = nixpkgs.legacyPackages.${system};
         in
         {
-          default = pkgs.python3.pkgs.buildPythonApplication {
-            pname = "job-scraper";
-            version = "0.1.0";
-            pyproject = true;
-            src = ./.;
-            build-system = [ pkgs.python3.pkgs.setuptools ];
-            dependencies = with pkgs.python3.pkgs; [
-              anthropic
-              beautifulsoup4
-              dacite
-              httpx
-              jinja2
-              lxml
-              mistune
-              scikit-learn
-              typer
-            ];
-          };
+          default =
+            let
+              inherit (pkgs.python3.pkgs)
+                buildPythonApplication
+                setuptools
+
+                anthropic
+                beautifulsoup4
+                dacite
+                httpx
+                jinja2
+                lxml
+                mistune
+                scikit-learn
+                typer
+
+                pytestCheckHook
+                pytest
+                ;
+            in
+            buildPythonApplication rec {
+              pname = "job-scraper";
+              version = "0.1.0";
+              pyproject = true;
+              src = ./.;
+
+              build-system = [ setuptools ];
+
+              dependencies = [
+                anthropic
+                beautifulsoup4
+                dacite
+                httpx
+                jinja2
+                lxml
+                mistune
+                scikit-learn
+                typer
+              ];
+
+              nativeCheckInputs = [
+                pytestCheckHook
+              ]
+              ++ passthru.optional-dependencies.test;
+
+              passthru.optional-dependencies.test = [
+                pytest
+              ];
+            };
         }
       );
 
@@ -100,7 +137,6 @@
           pkgs.mkShell {
             inherit shellHook;
             inputsFrom = [ self.packages.${system}.default ];
-            packages = [ ]; # additional dev shell packages here
             buildInputs = enabledPackages;
           };
       });
