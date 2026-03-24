@@ -168,13 +168,14 @@ async def _run(
     skip_score: bool,
     report: bool,
     keywords: str | None,
-    top_k: int,
     linkedin_dir: Path,
     dedup_fields: tuple[str, ...],
     resume_path: Path,
-    num_cold_start: int,
+    init_num_exploit: int,
     num_explore: int,
-    num_active_iters: int,
+    num_exploit: int,
+    init_learning_iters: int,
+    learning_iters: int,
     scrape_only: bool = False,
     input_jobs: Path | None = None,
     status_report: bool = False,
@@ -243,6 +244,7 @@ async def _run(
         rank_agreement,
         seed_by_similarity,
         select_by_disagreement,
+        select_by_score,
         train,
     )
 
@@ -254,7 +256,7 @@ async def _run(
 
     resume_text = resume_path.read_text()
     companies = load_companies()
-    ai = anthropic.AsyncAnthropic()
+    client = anthropic.AsyncAnthropic()
 
     # --- Generate prep artifacts ---
     from job_scraper.prep import (
@@ -272,14 +274,14 @@ async def _run(
         interest_rubric, candidate_brief = await asyncio.gather(
             generate_interest_rubric(
                 preferences_text,
-                ai,
+                client,
                 prep_model,
                 prep_cache,
                 prep_semaphore,
             ),
             generate_candidate_brief(
                 resume_text,
-                ai,
+                client,
                 prep_model,
                 prep_cache,
                 prep_semaphore,
@@ -295,7 +297,6 @@ async def _run(
     def _to_examples(
         jobs: list[Job],
         results: dict[str, Score],
-        exclude: set[str] | None = None,
     ) -> list:
         return [
             job_to_example(
@@ -305,121 +306,110 @@ async def _run(
             )
             for job in jobs
             if job.hash in results
-            and (exclude is None or job.hash not in exclude)
         ]
 
-    # Partition into already-scored and unscored
-    unscored = [
-        j
-        for j in filtered_jobs
-        if j.hash not in training.scored_hashes
-    ]
     cold_start = len(training.examples) == 0
-
     reference = preferences_text + "\n\n" + resume_text
+
+    def _unscored() -> list[Job]:
+        return [
+            j
+            for j in filtered_jobs
+            if j.hash not in training.scored_hashes
+        ]
 
     async with open_cache(score_cache_path) as score_cache:
 
-        async def _score_and_learn(
+        async def _score(
             batch: list[Job],
-        ) -> None:
-            if not batch:
-                return
-            results = await score_combined(
+        ) -> dict[str, Score]:
+            return await score_combined(
                 batch,
                 interest_rubric,
                 candidate_brief,
                 companies,
-                ai,
+                client,
                 model,
                 score_cache,
                 max_concurrent=max_concurrent_api,
             )
-            new_examples = _to_examples(
-                batch, results
-            )
-            training.append(new_examples)
-            logger.info(
-                "scored=%d total_training=%d",
-                len(new_examples),
-                len(training.examples),
-            )
 
         scored_before = len(training.scored_hashes)
 
+        # Cold start: seed by similarity to user profile
         if cold_start:
-            # Phase 1: Seed by similarity
             seed_sample = seed_by_similarity(
-                unscored, reference, num_cold_start
+                _unscored(), reference, init_num_exploit
             )
             logger.info(
-                "cold start: selected %d most similar jobs",
+                "cold start: seeding with %d similar jobs",
                 len(seed_sample),
             )
-            await _score_and_learn(seed_sample)
+            results = await _score(seed_sample)
+            training.append(_to_examples(seed_sample, results))
 
-            # Phase 2: Active learning loop
-            for iteration in range(num_active_iters):
-                unscored = [
-                    j
-                    for j in filtered_jobs
-                    if j.hash not in training.scored_hashes
-                ]
-                if not unscored:
-                    logger.info(
-                        "active learning: no unscored jobs remain"
-                    )
-                    break
+        # Active learning loop (shared by cold and warm start)
+        n_iters = (
+            init_learning_iters if cold_start else learning_iters
+        )
+        for iteration in range(n_iters):
+            unscored = _unscored()
+            if not unscored:
                 logger.info(
-                    "active learning: unscored=%d",
-                    len(unscored),
+                    "active learning: no unscored jobs remain"
                 )
-                vec, _, ensemble, iter_metrics = train(
-                    training.examples
-                )
-                logger.info(
-                    "active learning iter=%d r2=%.4f"
-                    " spearman=%.4f",
-                    iteration + 1,
-                    iter_metrics.cv_r2,
-                    iter_metrics.cv_spearman,
-                )
-                explore = select_by_disagreement(
-                    vec,
-                    ensemble,
-                    unscored,
-                    min(num_explore, len(unscored)),
-                )
-                await _score_and_learn(explore)
-        else:
-            # Warm start: disagreement-based exploration
-            logger.info(
-                "warm start: unscored=%d", len(unscored)
-            )
-            vec, _, ensemble, warm_metrics = train(
+                break
+
+            # Explore: score high-disagreement examples
+            vec, ridge, ensemble, iter_metrics = train(
                 training.examples
             )
             logger.info(
-                "warm start: r2=%.4f spearman=%.4f",
-                warm_metrics.cv_r2,
-                warm_metrics.cv_spearman,
+                "active learning iter=%d/%d "
+                "unscored=%d r2=%.4f spearman=%.4f",
+                iteration + 1,
+                n_iters,
+                len(unscored),
+                iter_metrics.cv_r2,
+                iter_metrics.cv_spearman,
             )
-            explore = select_by_disagreement(
+            explore_batch = select_by_disagreement(
                 vec,
                 ensemble,
                 unscored,
                 min(num_explore, len(unscored)),
             )
-            await _score_and_learn(explore)
+            results = await _score(explore_batch)
+            training.append(_to_examples(explore_batch, results))
 
-        scored_during = len(training.scored_hashes) - scored_before
+            # Exploit: score highest-predicted examples
+            unscored = _unscored()
+            if not unscored:
+                break
+            vec, ridge, ensemble, _ = train(
+                training.examples
+            )
+            exploit_batch = select_by_score(
+                vec,
+                ridge,
+                unscored,
+                min(num_exploit, len(unscored)),
+            )
+            results = await _score(exploit_batch)
+            training.append(
+                _to_examples(exploit_batch, results)
+            )
+
+        scored_during = (
+            len(training.scored_hashes) - scored_before
+        )
         logger.info(
-            "exploration complete: scored=%d total_training=%d",
+            "learning complete: scored=%d total_training=%d",
             scored_during,
             len(training.examples),
         )
 
-        # Final train + rank
+        # Final train + surrogate scores for all jobs
         vectorizer, ridge, _, cv_metrics = train(
             training.examples
         )
@@ -441,66 +431,28 @@ async def _run(
             surrogate_path,
         )
 
-        # Rank and take top-k
-        ranked = sorted(
-            zip(filtered_jobs, surrogate_scores, strict=True),
-            key=lambda x: x[1],
-            reverse=True,
-        )
-        top_jobs = [j for j, _ in ranked[:top_k]]
-        if ranked:
-            logger.info(
-                "surrogate top_k=%d best=%.4f cutoff=%.4f",
-                top_k,
-                ranked[0][1],
-                ranked[min(top_k, len(ranked)) - 1][1],
-            )
-
-        # Score top-k (cache hits for already-scored explore jobs)
-        topk_results = await score_combined(
-            top_jobs,
-            interest_rubric,
-            candidate_brief,
-            companies,
-            ai,
-            model,
-            score_cache,
-            max_concurrent=max_concurrent_api,
-        )
-
-        # Append newly scored (not in explore batch) to training data
-        newly_scored = _to_examples(
-            top_jobs, topk_results, exclude=training.scored_hashes
-        )
-        if newly_scored:
-            training.append(newly_scored)
-            logger.info(
-                "appended top-k training examples count=%d",
-                len(newly_scored),
-            )
-
-        # Top-k agreement: surrogate vs LLM on scored top-k jobs
+        # Agreement: surrogate vs LLM on all scored jobs
         surr_by_hash = {
             j.hash: s
             for j, s in zip(
                 filtered_jobs, surrogate_scores, strict=True
             )
         }
-        topk_surr, topk_actual = [], []
-        for job in top_jobs:
-            if data := topk_results.get(job.hash):
-                topk_surr.append(surr_by_hash[job.hash])
-                topk_actual.append(
-                    (data.interest.score / 100)
-                    * (data.fit.score / 100)
+        scored_surr, scored_actual = [], []
+        for ex in training.examples:
+            if ex.hash in surr_by_hash:
+                scored_surr.append(surr_by_hash[ex.hash])
+                scored_actual.append(
+                    (ex.interest_score / 100)
+                    * (ex.fit_score / 100)
                 )
 
-        topk_spearman = rank_agreement(topk_actual, topk_surr)
-        if topk_spearman is not None:
+        agreement = rank_agreement(scored_actual, scored_surr)
+        if agreement is not None:
             logger.info(
-                "top-k agreement n=%d spearman=%.4f",
-                len(topk_surr),
-                topk_spearman,
+                "surrogate agreement n=%d spearman=%.4f",
+                len(scored_surr),
+                agreement,
             )
 
         # Persist metrics
@@ -508,8 +460,8 @@ async def _run(
         metrics_record = {
             "timestamp": datetime.now(UTC).isoformat(),
             **to_dict(cv_metrics),
-            "topk_spearman": topk_spearman,
-            "topk_n": len(topk_surr),
+            "agreement_spearman": agreement,
+            "agreement_n": len(scored_surr),
         }
         with metrics_path.open("a") as f:
             f.write(json.dumps(metrics_record) + "\n")
@@ -517,10 +469,26 @@ async def _run(
             "wrote surrogate metrics path=%s", metrics_path
         )
 
-    # Merge into ScoredJob objects
+        # Retrieve full scores for all LLM-scored jobs (cache hits)
+        scored_jobs = [
+            j
+            for j in filtered_jobs
+            if j.hash in training.scored_hashes
+        ]
+        all_results = await score_combined(
+            scored_jobs,
+            interest_rubric,
+            candidate_brief,
+            companies,
+            client,
+            model,
+            score_cache,
+            max_concurrent=max_concurrent_api,
+        )
+
     scored = []
-    for job in top_jobs:
-        data = topk_results.get(job.hash)
+    for job in scored_jobs:
+        data = all_results.get(job.hash)
         if data is None:
             continue
         scored.append(
@@ -596,10 +564,6 @@ def run(
         str | None,
         typer.Option(help="FTS5 expression for boolean pre-filtering"),
     ] = None,
-    top_k: Annotated[
-        int,
-        typer.Option(help="Keep at most K jobs for LLM scoring"),
-    ] = 200,
     linkedin_dir: Annotated[
         Path, typer.Option(help="LinkedIn data directory")
     ] = Path("linkedin"),
@@ -642,10 +606,10 @@ def run(
             help="Comma-separated scraper names to exclude"
         ),
     ] = None,
-    num_cold_start: Annotated[
+    init_num_exploit: Annotated[
         int,
         typer.Option(
-            help="Jobs to sample for initial surrogate training"
+            help="Jobs to seed by similarity for cold start"
         ),
     ] = 200,
     num_explore: Annotated[
@@ -653,13 +617,25 @@ def run(
         typer.Option(
             help="Jobs to explore per active learning iteration"
         ),
-    ] = 30,
-    num_active_iters: Annotated[
+    ] = 10,
+    num_exploit: Annotated[
+        int,
+        typer.Option(
+            help="Jobs to exploit per active learning iteration"
+        ),
+    ] = 10,
+    init_learning_iters: Annotated[
         int,
         typer.Option(
             help="Active learning iterations during cold start"
         ),
-    ] = 10,
+    ] = 20,
+    learning_iters: Annotated[
+        int,
+        typer.Option(
+            help="Active learning iterations during warm start"
+        ),
+    ] = 1,
 ) -> None:
     """Scrape and score job postings."""
     if scrape_only and input_jobs is not None:
@@ -714,7 +690,6 @@ def run(
             skip_score=skip_score,
             report=report,
             keywords=keywords,
-            top_k=top_k,
             linkedin_dir=linkedin_dir,
             dedup_fields=fields,
             resume_path=resume,
@@ -723,9 +698,11 @@ def run(
             status_report=status_report,
             only=only_set,
             exclude=exclude_set,
-            num_cold_start=num_cold_start,
+            init_num_exploit=init_num_exploit,
             num_explore=num_explore,
-            num_active_iters=num_active_iters,
+            num_exploit=num_exploit,
+            init_learning_iters=init_learning_iters,
+            learning_iters=learning_iters,
         )
     )
 

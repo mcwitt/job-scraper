@@ -14,7 +14,7 @@ python -m job_scraper.main
 
 ## Architecture
 
-**Pipeline:** scrape → dedupe → keywords boolean filter → prep (interest rubric + candidate brief) → active learning (similarity seed / ensemble disagreement exploration) → surrogate ranking → LLM score top-k → sort → output
+**Pipeline:** scrape → dedupe → keywords boolean filter → prep (interest rubric + candidate brief) → active learning (similarity seed + explore/exploit loop) → surrogate ranking → sort → output
 
 Key files:
 - `job_scraper/main.py` — CLI (Typer) and pipeline orchestration

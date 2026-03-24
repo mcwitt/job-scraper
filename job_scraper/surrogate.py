@@ -249,6 +249,29 @@ def train(
     return vectorizer, model, ensemble, metrics
 
 
+def _select_top_n(
+    jobs: list[Job],
+    scores: np.ndarray,
+    n: int,
+    label: str,
+) -> list[Job]:
+    """Select jobs with highest values in scores array."""
+    indices = np.argsort(scores)[::-1][:n]
+    logger.info(
+        "%s jobs=%d n=%d best=%.6f cutoff=%.6f",
+        label,
+        len(jobs),
+        n,
+        float(scores[indices[0]])
+        if len(indices) > 0
+        else 0.0,
+        float(scores[indices[-1]])
+        if len(indices) > 0
+        else 0.0,
+    )
+    return [jobs[i] for i in indices]
+
+
 def select_by_disagreement(
     vectorizer: TfidfVectorizer,
     ensemble: list[Ridge],
@@ -260,18 +283,24 @@ def select_by_disagreement(
     X = vectorizer.transform(texts)
     preds = np.array([m.predict(X) for m in ensemble])
     variance = preds.var(axis=0)
-    indices = np.argsort(variance)[::-1][:n]
-    logger.info(
-        "select_by_disagreement jobs=%d n=%d "
-        "max_var=%.6f cutoff_var=%.6f",
-        len(jobs),
-        n,
-        float(variance[indices[0]]) if len(indices) > 0 else 0.0,
-        float(variance[indices[-1]])
-        if len(indices) > 0
-        else 0.0,
+    return _select_top_n(
+        jobs, variance, n, "select_by_disagreement"
     )
-    return [jobs[i] for i in indices]
+
+
+def select_by_score(
+    vectorizer: TfidfVectorizer,
+    model: Ridge,
+    jobs: list[Job],
+    n: int,
+) -> list[Job]:
+    """Select jobs with highest predicted scores."""
+    texts = [_text(j) for j in jobs]
+    X = vectorizer.transform(texts)
+    preds = model.predict(X)
+    return _select_top_n(
+        jobs, preds, n, "select_by_score"
+    )
 
 
 def rank_agreement(
