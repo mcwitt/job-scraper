@@ -8,7 +8,7 @@ Requires Python 3.13+.
 
 ```bash
 # Clone the repository
-git clone https://github.com/you/job-scraper.git
+git clone https://github.com/mcwitt/job-scraper.git
 cd job-scraper
 
 # Create and activate a virtual environment
@@ -160,7 +160,7 @@ Add the flake as an input and import the module:
 {
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
-    job-scraper.url = "github:you/job-scraper";
+    job-scraper.url = "github:mcwitt/job-scraper";
   };
 
   outputs = { nixpkgs, job-scraper, ... }: {
