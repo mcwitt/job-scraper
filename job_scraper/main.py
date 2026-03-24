@@ -579,7 +579,7 @@ def run(
     ] = 86400,
     model: Annotated[
         str, typer.Option(help="Claude model for scoring")
-    ] = "claude-haiku-4-5-20251001",
+    ] = "claude-haiku-4-5",
     prep_model: Annotated[
         str,
         typer.Option(help="Claude model for prep generation"),

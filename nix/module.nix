@@ -78,12 +78,13 @@ let
                 "--output-dir ${userDir}/output"
                 "--model ${s.model}"
                 "--prep-model ${s.prepModel}"
-                "--top-k ${toString s.topK}"
                 "--dedup-fields ${s.dedupFields}"
                 "--max-concurrent-api ${toString s.maxConcurrentApi}"
-                "--num-cold-start ${toString s.numColdStart}"
+                "--init-num-exploit ${toString s.initNumExploit}"
                 "--num-explore ${toString s.numExplore}"
-                "--num-active-iters ${toString s.numActiveIters}"
+                "--num-exploit ${toString s.numExploit}"
+                "--init-learning-iters ${toString s.initLearningIters}"
+                "--learning-iters ${toString s.learningIters}"
               ]
               ++ lib.optional (
                 ucfg.linkedinConnectionsDir != null
@@ -139,7 +140,7 @@ in
     settings = {
       model = mkOption {
         type = types.str;
-        default = "claude-haiku-4-5-20251001";
+        default = "claude-haiku-4-5";
         description = "Claude model for scoring.";
       };
       prepModel = mkOption {
@@ -162,30 +163,35 @@ in
         default = 86400;
         description = "Scrape cache TTL in seconds.";
       };
-      topK = mkOption {
-        type = types.int;
-        default = 200;
-        description = "Keep at most K jobs for LLM scoring.";
-      };
       dedupFields = mkOption {
         type = types.str;
         default = "title,company,team,description";
         description = "Comma-separated Job fields for deduplication.";
       };
-      numColdStart = mkOption {
+      initNumExploit = mkOption {
         type = types.int;
         default = 200;
-        description = "Jobs to sample for initial surrogate training.";
+        description = "Jobs to seed by similarity for cold start.";
       };
       numExplore = mkOption {
         type = types.int;
-        default = 30;
+        default = 10;
         description = "Jobs to explore per active learning iteration.";
       };
-      numActiveIters = mkOption {
+      numExploit = mkOption {
         type = types.int;
         default = 10;
+        description = "Jobs to exploit per active learning iteration.";
+      };
+      initLearningIters = mkOption {
+        type = types.int;
+        default = 20;
         description = "Active learning iterations during cold start.";
+      };
+      learningIters = mkOption {
+        type = types.int;
+        default = 1;
+        description = "Active learning iterations during warm start.";
       };
     };
 

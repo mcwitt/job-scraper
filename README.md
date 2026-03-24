@@ -62,13 +62,10 @@ python -m job_scraper.main --skip-score --keywords 'title:engineer AND location:
 python -m job_scraper.main --keywords '(title:engineer OR title:scientist) NOT title:intern' --report
 
 # Customize scoring model and prep generation model
-python -m job_scraper.main --model claude-haiku-4-5-20251001 --prep-model claude-sonnet-4-6
+python -m job_scraper.main --model claude-haiku-4-5 --prep-model claude-sonnet-4-6
 
-# Keep only the top 50 jobs for LLM scoring (default: 200)
-python -m job_scraper.main --top-k 50
-
-# Control active learning: seed size, exploration budget, iterations
-python -m job_scraper.main --num-cold-start 100 --num-explore 10 --num-active-iters 2
+# Control active learning: seed size, explore/exploit batch, iterations
+python -m job_scraper.main --init-num-exploit 100 --num-explore 10 --num-exploit 10 --init-learning-iters 5
 
 # Limit concurrent Claude API requests (default: 10)
 # Lower this if you're getting rate limited by the Anthropic API
@@ -81,7 +78,7 @@ python -m job_scraper.main --scrape-only --only discord,figma,linear
 python -m job_scraper.main --exclude salesforce,crowdstrike
 ```
 
-Output goes to `data/output/` by default:
+Output goes to `data/output` by default:
 - `jobs_raw.jsonl` — all scraped jobs before filtering
 - `jobs_surrogate.jsonl` — all filtered jobs with surrogate scores
 - `jobs.jsonl` — final ranked output
@@ -104,6 +101,7 @@ Every `.py` file in `job_scraper/scraper/` whose name does not start with `_` is
 | `job_scraper/surrogate.py` | TF-IDF + Ridge surrogate with bootstrap ensemble for active learning |
 | `job_scraper/prep.py` | Pre-generated interest rubric and candidate brief |
 | `job_scraper/scorer.py` | Claude scoring with prompt caching and structured output |
+| `job_scraper/llm.py` | Cached Claude API wrapper (`create()` with cache-through) |
 | `job_scraper/cache.py` | JSONL append-log cache with TTL |
 | `job_scraper/models.py` | `Job` / `ScoredJob` frozen dataclasses |
 | `job_scraper/report.py` | Interactive HTML report (Jinja2) |
@@ -111,7 +109,7 @@ Every `.py` file in `job_scraper/scraper/` whose name does not start with `_` is
 
 ## Adding scrapers
 
-**ATS board** (Greenhouse, Ashby, Lever, Gem, Workable, Workday): create a stub in `job_scraper/scraper/`:
+**ATS board** (Greenhouse, Ashby, Lever, Gem, Workable, Workday, iCIMS, Phenom, Rippling, SmartRecruiters, Breezy): create a stub in `job_scraper/scraper/`:
 
 ```python
 from job_scraper.scraper.greenhouse import scrape_board
@@ -179,8 +177,7 @@ Add the flake as an input and import the module:
             settings = {
               model = "claude-haiku-4-5";
               prepModel = "claude-sonnet-4-6";
-              topK = 200;
-              numActiveIters = 3;  # active learning iterations on cold start
+              initLearningIters = 5;  # active learning iterations on cold start
             };
 
             users.alice = {

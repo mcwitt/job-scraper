@@ -72,6 +72,10 @@ When adding a scraper for a new company, also add a company context file at `job
 
 Search the web for up-to-date information. See existing files in `job_scraper/companies/` for examples of proper formatting and length (~30-45 lines, hard-wrapped at ~65 chars).
 
+## Keeping docs in sync
+
+When changing CLI args, defaults, pipeline stages, or key modules, also update `README.md` and `nix/module.nix` to match.
+
 ## Style
 
 - Functional style: closures for state, no ABCs or inheritance
