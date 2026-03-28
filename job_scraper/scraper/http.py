@@ -61,37 +61,40 @@ class Http:
                 fetched_at=cached.get("fetched_at")
                 or datetime.now(UTC).isoformat(),
             )
-        last_exc: httpx.HTTPStatusError | None = None
+        last_exc: Exception | None = None
+        reason = ""
         for attempt in range(_MAX_ATTEMPTS):
+            text: str | None = None
             async with self.semaphore:
                 try:
                     resp = await make_request()
                     resp.raise_for_status()
                 except httpx.HTTPStatusError as exc:
                     last_exc = exc
+                    reason = str(exc.response.status_code)
                     if exc.response.status_code not in _RETRYABLE:
                         raise
+                except httpx.TransportError as exc:
+                    last_exc = exc
+                    reason = type(exc).__name__
                 else:
-                    body = resp.text
-                    break
-            # Retryable error — sleep outside semaphore
-            delay = _BACKOFF_BASE * (2**attempt)
-            delay += random.uniform(0, delay)  # noqa: S311
-            logger.debug(
-                "%s %s returned %d, retry %d/%d in %.1fs",
-                method,
-                url,
-                last_exc.response.status_code,
-                attempt + 1,
-                _MAX_ATTEMPTS,
-                delay,
-            )
-            await asyncio.sleep(delay)
-        else:
-            if last_exc is None:
-                raise RuntimeError("unreachable")
-            raise last_exc
-        return self._put_success(cache_key, body)
+                    text = resp.text
+            if text is not None:
+                return self._put_success(cache_key, text)
+            if attempt + 1 < _MAX_ATTEMPTS:
+                delay = _BACKOFF_BASE * (2**attempt)
+                delay += random.uniform(0, delay)  # noqa: S311
+                logger.debug(
+                    "%s %s failed (%s), retry %d/%d in %.1fs",
+                    method,
+                    url,
+                    reason,
+                    attempt + 1,
+                    _MAX_ATTEMPTS,
+                    delay,
+                )
+                await asyncio.sleep(delay)
+        raise last_exc  # type: ignore[misc]
 
     async def get(self, url: str) -> CachedResponse:
         """Return (body, fetched_at) for a GET request."""
