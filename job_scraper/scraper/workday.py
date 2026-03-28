@@ -87,14 +87,21 @@ def scrape_board(company: str, instance: str, site: str, *, name: str):
         return stubs
 
     def _flat_facets(facets_list: list[dict]) -> list[dict]:
-        """Flatten facets (including nested locationMainGroup)."""
+        """Flatten facets (including nested locationMainGroup).
+
+        Some facet groups (e.g. locationMainGroup) contain nested
+        sub-facets in their ``values`` array rather than countable
+        leaf entries.  We detect this by checking for ``count`` on
+        the first value and recurse into nested groups.
+        """
         out: list[dict] = []
         for fg in facets_list:
-            if fg.get("values"):
+            values = fg.get("values", [])
+            if values and "count" in values[0]:
                 out.append(fg)
-            for child in fg.get("facets", []):
-                if child.get("values"):
-                    out.append(child)
+            elif values:
+                # Nested facet group — values are sub-facets
+                out.extend(_flat_facets(values))
         return out
 
     async def _collect_all(
