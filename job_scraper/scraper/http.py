@@ -13,19 +13,9 @@ from job_scraper.cache import Cache
 
 logger = logging.getLogger(__name__)
 
-_ERROR_TTL = 3600  # cache HTTP errors for 1 hour
 _RETRYABLE = {429, 500, 502, 503, 504}
 _MAX_ATTEMPTS = 3
 _BACKOFF_BASE = 2.0  # seconds
-
-
-class CachedHttpError(Exception):
-    """Raised when a cached error entry is hit."""
-
-    def __init__(self, url: str, status: int):
-        self.url = url
-        self.status = status
-        super().__init__(f"cached HTTP {status} for {url}")
 
 
 @dataclass(frozen=True)
@@ -56,11 +46,6 @@ class Http:
         self.cache.put(key, entry)
         return CachedResponse(body, now)
 
-    def _put_error(self, key: str, status_code: int) -> None:
-        self.cache.put(
-            key, {"error": status_code, "_ttl": _ERROR_TTL}
-        )
-
     async def _fetch(
         self,
         cache_key: str,
@@ -71,8 +56,6 @@ class Http:
         """Execute an HTTP request with caching and retries."""
         cached = self.cache.get(cache_key)
         if cached is not None:
-            if "error" in cached:
-                raise CachedHttpError(url, cached["error"])
             return CachedResponse(
                 body=cached["body"],
                 fetched_at=cached.get("fetched_at")
@@ -87,10 +70,6 @@ class Http:
                 except httpx.HTTPStatusError as exc:
                     last_exc = exc
                     if exc.response.status_code not in _RETRYABLE:
-                        self._put_error(
-                            cache_key,
-                            exc.response.status_code,
-                        )
                         raise
                 else:
                     body = resp.text
@@ -111,9 +90,6 @@ class Http:
         else:
             if last_exc is None:
                 raise RuntimeError("unreachable")
-            self._put_error(
-                cache_key, last_exc.response.status_code
-            )
             raise last_exc
         return self._put_success(cache_key, body)
 
