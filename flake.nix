@@ -80,6 +80,7 @@
                 anthropic
                 beautifulsoup4
                 dacite
+                defusedxml
                 httpx
                 jinja2
                 lxml
@@ -103,6 +104,7 @@
                 anthropic
                 beautifulsoup4
                 dacite
+                defusedxml
                 httpx
                 jinja2
                 lxml

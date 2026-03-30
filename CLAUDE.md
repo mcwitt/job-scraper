@@ -39,6 +39,7 @@ Key files:
 - `job_scraper/scraper/phenom.py` — Phenom People `scrape_board()` factory
 - `job_scraper/scraper/rippling.py` — Rippling `scrape_board()` factory
 - `job_scraper/scraper/smartrecruiters.py` — SmartRecruiters `scrape_board()` factory
+- `job_scraper/scraper/trakstar.py` — Trakstar Hire `scrape_board()` factory
 - `preferences.md` — candidate job preferences for interest scoring; copy from `preferences.example.md`
 - `resume.md` — candidate resume for recruiter scoring; copy from `resume.example.md`
 
