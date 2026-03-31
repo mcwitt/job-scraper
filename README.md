@@ -53,29 +53,34 @@ nix develop    # or use direnv
 
 ```bash
 # Scrape only (no filtering or scoring)
-python -m job_scraper.main --skip-score
+python -m job_scraper.main run --skip-score
 
 # Boolean pre-filter with FTS5 expression
-python -m job_scraper.main --skip-score --keywords 'title:engineer AND location:remote'
+python -m job_scraper.main run --skip-score --keywords 'title:engineer AND location:remote'
 
 # Full pipeline: scrape + filter + surrogate rank + score + report
-python -m job_scraper.main --keywords '(title:engineer OR title:scientist) NOT title:intern' --report
+python -m job_scraper.main run --keywords '(title:engineer OR title:scientist) NOT title:intern' --report
 
 # Customize scoring model and prep generation model
-python -m job_scraper.main --model claude-haiku-4-5 --prep-model claude-sonnet-4-6
+python -m job_scraper.main run --model claude-haiku-4-5 --prep-model claude-sonnet-4-6
 
 # Control active learning: seed size, explore/exploit batch, iterations
-python -m job_scraper.main --init-num-exploit 100 --num-explore 10 --num-exploit 10 --init-learning-iters 5
+python -m job_scraper.main run --init-num-exploit 100 --num-explore 10 --num-exploit 10 --init-learning-iters 5
 
 # Limit concurrent Claude API requests (default: 10)
 # Lower this if you're getting rate limited by the Anthropic API
-python -m job_scraper.main --max-concurrent-api 5
+python -m job_scraper.main run --max-concurrent-api 5
 
 # Run only specific scrapers (comma-separated module names)
-python -m job_scraper.main --scrape-only --only discord,figma,linear
+python -m job_scraper.main run --scrape-only --only discord,figma,linear
 
 # Run all scrapers except specific ones
-python -m job_scraper.main --exclude salesforce,crowdstrike
+python -m job_scraper.main run --exclude salesforce,crowdstrike
+
+# Score specific jobs manually (by company, URL, or hash)
+python -m job_scraper.main score --company "Stripe" --report
+python -m job_scraper.main score --url "https://boards.greenhouse.io/stripe/jobs/12345" --report
+python -m job_scraper.main score --hash abc123 --hash def456
 ```
 
 Output goes to `data/output` by default:

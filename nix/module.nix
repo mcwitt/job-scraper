@@ -52,6 +52,7 @@ let
       s = cfg.settings;
       scrapeCmd = concatStringsSep " " [
         "${pkg}/bin/job-scraper"
+        "run"
         "--scrape-only"
         "--status-report"
         "--cache-dir ${stateDir}/cache"
@@ -68,6 +69,7 @@ let
             cmd = concatStringsSep " " (
               [
                 "${pkg}/bin/job-scraper"
+                "run"
                 "--input-jobs ${stateDir}/output/jobs_raw.jsonl"
                 "--report"
                 "--preferences ${files.preferencesFile}"
@@ -274,6 +276,8 @@ in
         User = "job-scraper";
         Group = "job-scraper";
         StateDirectory = "job-scraper";
+        StateDirectoryMode = "0775";
+        UMask = "0002";
         # Hardening
         NoNewPrivileges = true;
         ProtectSystem = "strict";

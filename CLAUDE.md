@@ -6,10 +6,14 @@ Scrape job postings from ATS platforms, score them against candidate preferences
 
 ```bash
 # Scrape all discovered sources, skip scoring
-python -m job_scraper.main --skip-score
+python -m job_scraper.main run --skip-score
 
 # Full pipeline (requires ANTHROPIC_API_KEY)
-python -m job_scraper.main
+python -m job_scraper.main run
+
+# Score specific jobs manually (merges into existing output)
+python -m job_scraper.main score --company "Stripe" --report
+python -m job_scraper.main score --url "https://..." --hash abc123
 ```
 
 ## Architecture

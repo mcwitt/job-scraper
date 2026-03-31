@@ -205,6 +205,94 @@ def _score_to_examples(
     ]
 
 
+def _match_jobs(
+    jobs: list[Job],
+    urls: list[str],
+    hashes: list[str],
+    companies: list[str],
+) -> list[Job]:
+    """Select jobs matching any of the given filters."""
+    hash_set = set(hashes)
+    companies_lower = [c.lower() for c in companies]
+    matched: set[str] = set()
+    for job in jobs:
+        if job.hash in hash_set:
+            matched.add(job.hash)
+            continue
+        if any(u in job.url for u in urls):
+            matched.add(job.hash)
+            continue
+        company_lower = job.company.lower()
+        if any(c in company_lower for c in companies_lower):
+            matched.add(job.hash)
+    return [j for j in jobs if j.hash in matched]
+
+
+def _merge_scored_jobs(
+    existing_path: Path, new: list["ScoredJob"]
+) -> list["ScoredJob"]:
+    """Merge new scored jobs into existing output, deduping."""
+    from job_scraper.models import ScoredJob
+
+    existing: list[ScoredJob] = []
+    if existing_path.exists():
+        with existing_path.open() as f:
+            for line in f:
+                existing.append(
+                    dacite.from_dict(ScoredJob, json.loads(line))
+                )
+    by_hash = {j.hash: j for j in existing}
+    for j in new:
+        by_hash[j.hash] = j
+    return sorted(by_hash.values(), key=_priority, reverse=True)
+
+
+async def _init_scoring(
+    preferences_path: Path,
+    resume_path: Path,
+    prep_model: str,
+    cache_dir: Path,
+    max_concurrent_api: int,
+) -> tuple["anthropic.AsyncAnthropic", str, str, dict[str, str]]:
+    """Shared setup: client, prep artifacts, company context."""
+    import anthropic
+
+    from job_scraper.companies import load_companies
+
+    preferences_text = preferences_path.read_text()
+    if not preferences_text.strip():
+        logger.warning(
+            "preferences is empty path=%s", preferences_path
+        )
+    resume_text = resume_path.read_text()
+    companies = load_companies()
+    client = anthropic.AsyncAnthropic()
+
+    interest_rubric, candidate_brief = await _generate_prep(
+        preferences_text,
+        resume_text,
+        client,
+        prep_model,
+        cache_dir,
+        max_concurrent_api,
+    )
+    return client, interest_rubric, candidate_brief, companies
+
+
+def _generate_report(
+    scored: list["ScoredJob"],
+    output_dir: Path,
+    linkedin_dir: Path,
+) -> None:
+    from job_scraper.linkedin import load as load_linkedin
+    from job_scraper.report import render_report
+
+    lookup = load_linkedin(linkedin_dir)
+    report_path = output_dir / "report.html"
+    render_report(scored, report_path, lookup=lookup)
+    logger.info("wrote report path=%s", report_path)
+
+
 def _priority(j: "ScoredJob") -> float:
     return (j.score_interest.score / 100) * (
         j.score_fit.score / 100
@@ -386,10 +474,6 @@ async def _run(
         _write_jsonl(filtered, output_dir / "jobs.jsonl")
         return
 
-    # --- Prep artifacts ---
-    import anthropic
-
-    from job_scraper.companies import load_companies
     from job_scraper.scorer import score_combined
     from job_scraper.surrogate import (
         TrainingData,
@@ -400,23 +484,14 @@ async def _run(
         train,
     )
 
-    preferences_text = preferences_path.read_text()
-    if not preferences_text.strip():
-        logger.warning(
-            "preferences is empty path=%s", preferences_path
+    client, interest_rubric, candidate_brief, companies = (
+        await _init_scoring(
+            preferences_path,
+            resume_path,
+            prep_model,
+            cache_dir,
+            max_concurrent_api,
         )
-
-    resume_text = resume_path.read_text()
-    companies = load_companies()
-    client = anthropic.AsyncAnthropic()
-
-    interest_rubric, candidate_brief = await _generate_prep(
-        preferences_text,
-        resume_text,
-        client,
-        prep_model,
-        cache_dir,
-        max_concurrent_api,
     )
 
     # --- Active learning ---
@@ -426,7 +501,11 @@ async def _run(
         candidate_brief,
     )
     cold_start = len(training.examples) == 0
-    reference = preferences_text + "\n\n" + resume_text
+    reference = (
+        preferences_path.read_text()
+        + "\n\n"
+        + resume_path.read_text()
+    )
     scored_before = len(training.scored_hashes)
 
     score_cache_path = cache_dir / "score.jsonl"
@@ -557,13 +636,7 @@ async def _run(
     _write_jsonl(scored, output_dir / "jobs.jsonl")
 
     if report:
-        from job_scraper.linkedin import load as load_linkedin
-        from job_scraper.report import render_report
-
-        lookup = load_linkedin(linkedin_dir)
-        report_path = output_dir / "report.html"
-        render_report(scored, report_path, lookup=lookup)
-        logger.info("wrote report path=%s", report_path)
+        _generate_report(scored, output_dir, linkedin_dir)
 
 
 @app.command()
@@ -743,6 +816,162 @@ def run(
             num_exploit=num_exploit,
             init_learning_iters=init_learning_iters,
             learning_iters=learning_iters,
+        )
+    )
+
+
+async def _score_manual(
+    cache_dir: Path,
+    output_dir: Path,
+    model: str,
+    prep_model: str,
+    preferences_path: Path,
+    resume_path: Path,
+    max_concurrent_api: int,
+    report: bool,
+    linkedin_dir: Path,
+    input_jobs: Path,
+    urls: list[str],
+    hashes: list[str],
+    companies_filter: list[str],
+) -> None:
+    from job_scraper.scorer import score_combined
+    from job_scraper.surrogate import TrainingData
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    all_jobs = _load_jobs(input_jobs)
+    matched = _match_jobs(
+        all_jobs, urls, hashes, companies_filter
+    )
+    if not matched:
+        logger.warning("no jobs matched the given filters")
+        return
+    logger.info("matched jobs count=%d", len(matched))
+
+    client, interest_rubric, candidate_brief, companies = (
+        await _init_scoring(
+            preferences_path,
+            resume_path,
+            prep_model,
+            cache_dir,
+            max_concurrent_api,
+        )
+    )
+
+    score_cache_path = cache_dir / "score.jsonl"
+    async with open_cache(score_cache_path) as score_cache:
+        results = await score_combined(
+            matched,
+            interest_rubric,
+            candidate_brief,
+            companies,
+            client,
+            model,
+            score_cache,
+            max_concurrent=max_concurrent_api,
+        )
+
+    training = TrainingData(
+        cache_dir / "surrogate_training.jsonl",
+        interest_rubric,
+        candidate_brief,
+    )
+    training.append(_score_to_examples(matched, results))
+
+    new_scored = _collect_scored_jobs(matched, results)
+    jobs_path = output_dir / "jobs.jsonl"
+    merged = _merge_scored_jobs(jobs_path, new_scored)
+    _write_jsonl(merged, jobs_path)
+
+    if report:
+        _generate_report(merged, output_dir, linkedin_dir)
+
+
+@app.command()
+def score(
+    url: Annotated[
+        list[str] | None,
+        typer.Option(
+            help="Score jobs matching this URL (substring)"
+        ),
+    ] = None,
+    hash: Annotated[
+        list[str] | None,
+        typer.Option(help="Score jobs matching this hash"),
+    ] = None,
+    company: Annotated[
+        list[str] | None,
+        typer.Option(
+            help="Score jobs matching this company name"
+            " (case-insensitive substring)"
+        ),
+    ] = None,
+    input_jobs: Annotated[
+        Path,
+        typer.Option(help="JSONL file to select jobs from"),
+    ] = Path("data/output/jobs_raw.jsonl"),
+    cache_dir: Annotated[
+        Path, typer.Option(help="Cache directory")
+    ] = Path("data/cache"),
+    output_dir: Annotated[
+        Path, typer.Option(help="Output directory")
+    ] = Path("data/output"),
+    model: Annotated[
+        str, typer.Option(help="Claude model for scoring")
+    ] = "claude-haiku-4-5",
+    prep_model: Annotated[
+        str,
+        typer.Option(help="Claude model for prep generation"),
+    ] = "claude-sonnet-4-6",
+    preferences: Annotated[
+        Path,
+        typer.Option(help="Path to candidate preferences"),
+    ] = Path("preferences.md"),
+    resume: Annotated[
+        Path,
+        typer.Option(
+            help="Path to resume for recruiter scoring"
+        ),
+    ] = Path("resume.md"),
+    max_concurrent_api: Annotated[
+        int,
+        typer.Option(
+            help="Max concurrent Claude API requests"
+        ),
+    ] = 10,
+    report: Annotated[
+        bool,
+        typer.Option("--report", help="Regenerate HTML report"),
+    ] = False,
+    linkedin_dir: Annotated[
+        Path, typer.Option(help="LinkedIn data directory")
+    ] = Path("linkedin"),
+) -> None:
+    """Score specific jobs by URL, hash, or company name."""
+    urls = url or []
+    hashes = hash or []
+    companies_filter = company or []
+    if not urls and not hashes and not companies_filter:
+        raise typer.BadParameter(
+            "Provide at least one --url, --hash, or --company"
+        )
+    logging.basicConfig(level=logging.INFO)
+    asyncio.run(
+        _score_manual(
+            cache_dir=cache_dir,
+            output_dir=output_dir,
+            model=model,
+            prep_model=prep_model,
+            preferences_path=preferences,
+            resume_path=resume,
+            max_concurrent_api=max_concurrent_api,
+            report=report,
+            linkedin_dir=linkedin_dir,
+            input_jobs=input_jobs,
+            urls=urls,
+            hashes=hashes,
+            companies_filter=companies_filter,
         )
     )
 
