@@ -12,8 +12,9 @@ python -m job_scraper.main run --skip-score
 python -m job_scraper.main run
 
 # Score specific jobs manually (merges into existing output)
-python -m job_scraper.main score --company "Stripe" --report
-python -m job_scraper.main score --url "https://..." --hash abc123
+python -m job_scraper.main score --keywords "company:stripe" --report
+python -m job_scraper.main score --keywords "company:stripe title:engineer"
+python -m job_scraper.main score --hash abc123
 ```
 
 ## Architecture

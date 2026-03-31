@@ -205,29 +205,6 @@ def _score_to_examples(
     ]
 
 
-def _match_jobs(
-    jobs: list[Job],
-    urls: list[str],
-    hashes: list[str],
-    companies: list[str],
-) -> list[Job]:
-    """Select jobs matching any of the given filters."""
-    hash_set = set(hashes)
-    companies_lower = [c.lower() for c in companies]
-    matched: set[str] = set()
-    for job in jobs:
-        if job.hash in hash_set:
-            matched.add(job.hash)
-            continue
-        if any(u in job.url for u in urls):
-            matched.add(job.hash)
-            continue
-        company_lower = job.company.lower()
-        if any(c in company_lower for c in companies_lower):
-            matched.add(job.hash)
-    return [j for j in jobs if j.hash in matched]
-
-
 def _merge_scored_jobs(
     existing_path: Path, new: list["ScoredJob"]
 ) -> list["ScoredJob"]:
@@ -831,9 +808,8 @@ async def _score_manual(
     report: bool,
     linkedin_dir: Path,
     input_jobs: Path,
-    urls: list[str],
     hashes: list[str],
-    companies_filter: list[str],
+    keywords: str | None,
 ) -> None:
     from job_scraper.scorer import score_combined
     from job_scraper.surrogate import TrainingData
@@ -841,9 +817,14 @@ async def _score_manual(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     all_jobs = _load_jobs(input_jobs)
-    matched = _match_jobs(
-        all_jobs, urls, hashes, companies_filter
+    hash_set = set(hashes)
+    matched = (
+        [j for j in all_jobs if j.hash in hash_set]
+        if hash_set
+        else all_jobs
     )
+    if keywords:
+        matched = filter_relevant(keywords, matched)
     if not matched:
         logger.warning("no jobs matched the given filters")
         return
@@ -890,22 +871,9 @@ async def _score_manual(
 
 @app.command()
 def score(
-    url: Annotated[
-        list[str] | None,
-        typer.Option(
-            help="Score jobs matching this URL (substring)"
-        ),
-    ] = None,
     hash: Annotated[
         list[str] | None,
         typer.Option(help="Score jobs matching this hash"),
-    ] = None,
-    company: Annotated[
-        list[str] | None,
-        typer.Option(
-            help="Score jobs matching this company name"
-            " (case-insensitive substring)"
-        ),
     ] = None,
     input_jobs: Annotated[
         Path,
@@ -947,14 +915,19 @@ def score(
     linkedin_dir: Annotated[
         Path, typer.Option(help="LinkedIn data directory")
     ] = Path("linkedin"),
+    keywords: Annotated[
+        str | None,
+        typer.Option(
+            help="FTS5 expression to further filter matched"
+            " jobs (e.g. 'title:engineer')"
+        ),
+    ] = None,
 ) -> None:
-    """Score specific jobs by URL, hash, or company name."""
-    urls = url or []
+    """Score specific jobs by hash or keywords filter."""
     hashes = hash or []
-    companies_filter = company or []
-    if not urls and not hashes and not companies_filter:
+    if not hashes and not keywords:
         raise typer.BadParameter(
-            "Provide at least one --url, --hash, or --company"
+            "Provide at least one --hash or --keywords"
         )
     logging.basicConfig(level=logging.INFO)
     asyncio.run(
@@ -969,9 +942,8 @@ def score(
             report=report,
             linkedin_dir=linkedin_dir,
             input_jobs=input_jobs,
-            urls=urls,
             hashes=hashes,
-            companies_filter=companies_filter,
+            keywords=keywords,
         )
     )
 
