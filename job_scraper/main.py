@@ -533,7 +533,7 @@ async def _run(
                 break
 
             # Explore: high-disagreement examples
-            vec, ridge, ensemble, metrics = train(
+            vec, predictor, ensemble, metrics = train(
                 training.examples
             )
             logger.info(
@@ -562,12 +562,12 @@ async def _run(
             )
             if not unscored:
                 break
-            vec, ridge, ensemble, _ = train(
+            vec, predictor, ensemble, _ = train(
                 training.examples
             )
             exploit = select_by_score(
                 vec,
-                ridge,
+                predictor,
                 unscored,
                 min(num_exploit, len(unscored)),
             )
@@ -586,11 +586,11 @@ async def _run(
         )
 
         # --- Surrogate output ---
-        vectorizer, ridge, _, cv_metrics = train(
+        vectorizer, predictor, _, cv_metrics = train(
             training.examples
         )
         surrogate_scores = predict(
-            (vectorizer, ridge), filtered
+            (vectorizer, predictor), filtered
         )
         _write_surrogate_output(
             filtered,

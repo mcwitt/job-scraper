@@ -1,11 +1,13 @@
 import hashlib
 import json
 import logging
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import Any
 
 import numpy as np
-from scipy.sparse import spmatrix
+import scipy.sparse as sp
 from scipy.stats import spearmanr
 from sklearn.ensemble import BaggingRegressor
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -15,16 +17,40 @@ from sklearn.model_selection import cross_val_predict
 
 from job_scraper.models import Job
 
+Predict = Callable[..., np.ndarray]
+
 logger = logging.getLogger(__name__)
 
 
-_ALPHAS = np.logspace(-2, 2, 20)  # 0.01 to 100, 20 points
+class Vectorizer:
+    """Separate TF-IDF for metadata and description."""
 
+    def __init__(self, meta_features: int = 700, desc_features: int = 1300) -> None:
+        tok = r"(?u)\b\w+\b"
+        kw: dict[str, Any] = dict(
+            ngram_range=(1, 3),
+            sublinear_tf=True,
+            stop_words="english",
+            token_pattern=tok,
+        )
+        self._meta = TfidfVectorizer(max_features=meta_features, **kw)
+        self._desc = TfidfVectorizer(max_features=desc_features, **kw)
 
-def _make_vectorizer() -> TfidfVectorizer:
-    return TfidfVectorizer(
-        max_features=5000, stop_words="english"
-    )
+    def fit_transform(self, metas: list[str], descs: list[str]):
+        return sp.hstack(
+            [
+                self._meta.fit_transform(metas),
+                self._desc.fit_transform(descs),
+            ]
+        )
+
+    def transform(self, metas: list[str], descs: list[str]):
+        return sp.hstack(
+            [
+                self._meta.transform(metas),
+                self._desc.transform(descs),
+            ]
+        )
 
 
 @dataclass(frozen=True)
@@ -40,9 +66,7 @@ class Example:
     fit_score: int
 
 
-def job_to_example(
-    job: Job, interest_score: int, fit_score: int
-) -> Example:
+def job_to_example(job: Job, interest_score: int, fit_score: int) -> Example:
     return Example(
         hash=job.hash,
         title=job.title,
@@ -89,8 +113,7 @@ class TrainingData:
         header = json.loads(lines[0])
         if header.get("_fingerprint") != self._fingerprint:
             logger.info(
-                "prep fingerprint changed, discarding"
-                " training data path=%s",
+                "prep fingerprint changed, discarding training data path=%s",
                 self._path,
             )
             self._path.unlink(missing_ok=True)
@@ -111,12 +134,7 @@ class TrainingData:
         write_header = not self._path.exists()
         with self._path.open("a") as f:
             if write_header:
-                f.write(
-                    json.dumps(
-                        {"_fingerprint": self._fingerprint}
-                    )
-                    + "\n"
-                )
+                f.write(json.dumps({"_fingerprint": self._fingerprint}) + "\n")
             for ex in new:
                 f.write(json.dumps(asdict(ex)) + "\n")
         self.examples.extend(new)
@@ -128,8 +146,8 @@ class TrainingData:
         )
 
 
-def _text(obj: Job | Example) -> str:
-    parts = [obj.title, obj.company, obj.description[:4000]]
+def _meta(obj: Job | Example) -> str:
+    parts = [obj.title, obj.company]
     if obj.location:
         parts.append(obj.location)
     if obj.team:
@@ -137,6 +155,16 @@ def _text(obj: Job | Example) -> str:
     if obj.comp:
         parts.append(obj.comp)
     return " ".join(parts)
+
+
+def _desc(obj: Job | Example) -> str:
+    return obj.description[:16000]
+
+
+def _texts(
+    objs: list[Job] | list[Example],
+) -> tuple[list[str], list[str]]:
+    return [_meta(o) for o in objs], [_desc(o) for o in objs]
 
 
 @dataclass(frozen=True)
@@ -147,9 +175,7 @@ class Metrics:
     cv_spearman: float
 
 
-def _cv_metrics(
-    X: spmatrix, targets: np.ndarray, alpha: float
-) -> Metrics:
+def _cv_metrics(X,targets: np.ndarray, alpha: float) -> Metrics:
     """Cross-validated evaluation on pre-computed features."""
     n = len(targets)
     if n < 2:
@@ -162,9 +188,7 @@ def _cv_metrics(
         )
 
     n_folds = min(5, n)
-    preds = cross_val_predict(
-        Ridge(alpha=alpha), X, targets, cv=n_folds
-    )
+    preds = cross_val_predict(Ridge(alpha=alpha), X, targets, cv=n_folds)
 
     ss_res = float(np.sum((targets - preds) ** 2))
     ss_tot = float(np.sum((targets - targets.mean()) ** 2))
@@ -186,16 +210,15 @@ def seed_by_similarity(
     n: int,
 ) -> list[Job]:
     """Select jobs most similar to reference text via TF-IDF cosine."""
-    texts = [_text(j) for j in jobs]
-    texts.append(reference_text)
-    vec = _make_vectorizer()
-    X = vec.fit_transform(texts)
-    sims = cosine_similarity(X[:-1], X[-1:]).flatten()  # type: ignore[index]
+    metas = [_meta(j) for j in jobs] + [reference_text]
+    descs = [_desc(j) for j in jobs] + [""]
+    vec = Vectorizer()
+    X = vec.fit_transform(metas, descs)
+    sims = cosine_similarity(X[:-1], X[-1:]).flatten()  # type: ignore[arg-type]
     indices = np.argsort(sims)[::-1][:n]
     selected = [jobs[i] for i in indices]
     logger.info(
-        "seed_by_similarity jobs=%d ref_len=%d "
-        "best=%.4f cutoff=%.4f",
+        "seed_by_similarity jobs=%d ref_len=%d best=%.4f cutoff=%.4f",
         len(jobs),
         len(reference_text),
         float(sims[indices[0]]) if len(indices) > 0 else 0.0,
@@ -204,42 +227,57 @@ def seed_by_similarity(
     return selected
 
 
+def _fit_ridge(X,targets: np.ndarray) -> RidgeCV:
+    """Pick alpha via LOO-CV, return fitted model."""
+    rcv = RidgeCV(alphas=np.logspace(-2, 2, 50))
+    rcv.fit(X, targets)
+    return rcv
+
+
+def _dual_head(interest: RidgeCV, fit: RidgeCV) -> Predict:
+    """Predict interest and fit separately, combine via geometric mean."""
+
+    def predict(X) -> np.ndarray:
+        ip = np.clip(interest.predict(X), 0, 1)
+        fp = np.clip(fit.predict(X), 0, 1)
+        return np.sqrt(ip * fp)
+
+    return predict
+
+
 def train(
     examples: list[Example],
     n_models: int = 10,
-) -> tuple[TfidfVectorizer, Ridge, list[Ridge], Metrics]:
-    texts = [_text(ex) for ex in examples]
-    targets = np.array([
-        (ex.interest_score / 100) * (ex.fit_score / 100)
-        for ex in examples
-    ])
-    vectorizer = _make_vectorizer()
-    X = vectorizer.fit_transform(texts)
+) -> tuple[Vectorizer, Predict, list[Ridge], Metrics]:
+    metas, descs = _texts(examples)
+    interest = np.array([ex.interest_score / 100 for ex in examples])
+    fit = np.array([ex.fit_score / 100 for ex in examples])
+    combined = np.sqrt(interest * fit)
 
-    # Pick alpha via built-in LOO cross-validation
-    rcv = RidgeCV(alphas=_ALPHAS)
-    rcv.fit(X, targets)  # type: ignore[arg-type]
-    alpha = float(rcv.alpha_)
+    vectorizer = Vectorizer()
+    X = vectorizer.fit_transform(metas, descs)
 
-    model = Ridge(alpha=alpha)
-    model.fit(X, targets)
+    model_i = _fit_ridge(X, interest)
+    model_f = _fit_ridge(X, fit)
+    model = _dual_head(model_i, model_f)
+
     logger.info(
-        "trained surrogate examples=%d features=%d alpha=%.4f",
+        "trained surrogate examples=%d features=%d alpha_i=%.4f alpha_f=%.4f",
         len(examples),
-        len(vectorizer.get_feature_names_out()),
-        alpha,
+        X.shape[1],  # type: ignore[index]
+        model_i.alpha_,
+        model_f.alpha_,
     )
 
-    # Bootstrap ensemble for uncertainty estimation
     bag = BaggingRegressor(
-        estimator=Ridge(alpha=alpha),
+        estimator=Ridge(alpha=1.0),
         n_estimators=n_models,
         bootstrap=True,
     )
-    bag.fit(X, targets)
+    bag.fit(X, combined)  # type: ignore[arg-type]
     ensemble: list[Ridge] = bag.estimators_  # type: ignore[assignment]
 
-    metrics = _cv_metrics(X, targets, alpha)
+    metrics = _cv_metrics(X, combined, 1.0)
     logger.info(
         "surrogate CV r2=%.4f mae=%.4f spearman=%.4f",
         metrics.cv_r2,
@@ -262,50 +300,38 @@ def _select_top_n(
         label,
         len(jobs),
         n,
-        float(scores[indices[0]])
-        if len(indices) > 0
-        else 0.0,
-        float(scores[indices[-1]])
-        if len(indices) > 0
-        else 0.0,
+        float(scores[indices[0]]) if len(indices) > 0 else 0.0,
+        float(scores[indices[-1]]) if len(indices) > 0 else 0.0,
     )
     return [jobs[i] for i in indices]
 
 
 def select_by_disagreement(
-    vectorizer: TfidfVectorizer,
+    vectorizer: Vectorizer,
     ensemble: list[Ridge],
     jobs: list[Job],
     n: int,
 ) -> list[Job]:
     """Select jobs where ensemble models disagree most."""
-    texts = [_text(j) for j in jobs]
-    X = vectorizer.transform(texts)
-    preds = np.array([m.predict(X) for m in ensemble])
+    X = vectorizer.transform(*_texts(jobs))
+    preds = np.array([m.predict(X) for m in ensemble])  # type: ignore[arg-type]
     variance = preds.var(axis=0)
-    return _select_top_n(
-        jobs, variance, n, "select_by_disagreement"
-    )
+    return _select_top_n(jobs, variance, n, "select_by_disagreement")
 
 
 def select_by_score(
-    vectorizer: TfidfVectorizer,
-    model: Ridge,
+    vectorizer: Vectorizer,
+    model: Predict,
     jobs: list[Job],
     n: int,
 ) -> list[Job]:
     """Select jobs with highest predicted scores."""
-    texts = [_text(j) for j in jobs]
-    X = vectorizer.transform(texts)
-    preds = model.predict(X)
-    return _select_top_n(
-        jobs, preds, n, "select_by_score"
-    )
+    X = vectorizer.transform(*_texts(jobs))
+    preds = model(X)
+    return _select_top_n(jobs, preds, n, "select_by_score")
 
 
-def rank_agreement(
-    actual: list[float], predicted: list[float]
-) -> float | None:
+def rank_agreement(actual: list[float], predicted: list[float]) -> float | None:
     """Spearman rank correlation, or None if too few pairs."""
     if len(actual) < 3:
         return None
@@ -313,10 +339,9 @@ def rank_agreement(
 
 
 def predict(
-    model: tuple[TfidfVectorizer, Ridge],
+    model: tuple[Vectorizer, Predict],
     jobs: list[Job],
 ) -> list[float]:
-    vectorizer, ridge = model
-    texts = [_text(j) for j in jobs]
-    X = vectorizer.transform(texts)
-    return ridge.predict(X).tolist()
+    vectorizer, pred = model
+    X = vectorizer.transform(*_texts(jobs))
+    return pred(X).tolist()

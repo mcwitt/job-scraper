@@ -25,7 +25,7 @@ Key files:
 - `job_scraper/main.py` — CLI (Typer) and pipeline orchestration
 - `job_scraper/relevance.py` — FTS5 boolean filtering against keywords
 - `job_scraper/prep.py` — pre-generated interest rubric and candidate brief
-- `job_scraper/surrogate.py` — TF-IDF + Ridge surrogate with bootstrap ensemble for active learning
+- `job_scraper/surrogate.py` — DualVectorizer TF-IDF + dual-head Ridge surrogate with bootstrap ensemble for active learning
 - `job_scraper/scorer.py` — Claude scoring with prompt caching and structured output (single combined call)
 - `job_scraper/llm.py` — cached Claude API wrapper (`create()` with cache-through)
 - `job_scraper/companies/` — company context package (bundled `.md` files + `canonicalize`/`load_companies`)
