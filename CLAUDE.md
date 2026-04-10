@@ -5,11 +5,14 @@ Scrape job postings from ATS platforms, score them against candidate preferences
 ## Quick start
 
 ```bash
-# Scrape all discovered sources, skip scoring
+# Scrape all configured sources, skip scoring
 python -m job_scraper.main run --skip-score
 
 # Full pipeline (requires ANTHROPIC_API_KEY)
 python -m job_scraper.main run
+
+# Use a specific config file
+python -m job_scraper.main run --config path/to/scrape.toml
 
 # Score specific jobs manually (merges into existing output)
 python -m job_scraper.main score --keywords "company:stripe" --report
@@ -23,16 +26,17 @@ python -m job_scraper.main score --hash abc123
 
 Key files:
 - `job_scraper/main.py` — CLI (Typer) and pipeline orchestration
+- `job_scraper/config.py` — TOML config loader (`scrape.toml`)
 - `job_scraper/relevance.py` — FTS5 boolean filtering against keywords
 - `job_scraper/prep.py` — pre-generated interest rubric and candidate brief
 - `job_scraper/surrogate.py` — DualVectorizer TF-IDF + dual-head Ridge surrogate with bootstrap ensemble for active learning
 - `job_scraper/scorer.py` — Claude scoring with prompt caching and structured output (single combined call)
 - `job_scraper/llm.py` — cached Claude API wrapper (`create()` with cache-through)
-- `job_scraper/companies/` — company context package (bundled `.md` files + `canonicalize`/`load_companies`)
+- `job_scraper/companies/` — `canonicalize`/`load_companies` (loads `.md` files from configurable directory)
 - `job_scraper/cache.py` — JSONL append-log cache with TTL
 - `job_scraper/models.py` — Job/ScoredJob/Interest/Fit frozen dataclasses
 - `job_scraper/report.py` — HTML report (Jinja2)
-- `job_scraper/scraper/__init__.py` — `ScrapeFn` type, `discover()` auto-discovery
+- `job_scraper/scraper/__init__.py` — `ScrapeFn` type, `load_scrapers()` config-driven loader
 - `job_scraper/scraper/http.py` — cached HTTP GET/POST with rate-limiting
 - `job_scraper/scraper/html.py` — shared HTML-to-text utility
 - `job_scraper/scraper/greenhouse.py` — Greenhouse `scrape_board()` factory
@@ -45,30 +49,39 @@ Key files:
 - `job_scraper/scraper/rippling.py` — Rippling `scrape_board()` factory
 - `job_scraper/scraper/smartrecruiters.py` — SmartRecruiters `scrape_board()` factory
 - `job_scraper/scraper/trakstar.py` — Trakstar Hire `scrape_board()` factory
+- `job_scraper/scraper/workable.py` — Workable `scrape_board()` factory
+- `job_scraper/scraper/breezy.py` — Breezy `scrape_board()` factory
+- `scrape.example.toml` — example scraper config
 - `preferences.md` — candidate job preferences for interest scoring; copy from `preferences.example.md`
 - `resume.md` — candidate resume for recruiter scoring; copy from `resume.example.md`
 
-## Adding scrapers
+## Scraper configuration
 
-Drop a `.py` file in `job_scraper/scraper/` (name must not start with `_`). For ATS boards, import the factory and call it:
+Scrapers are configured in `scrape.toml` (default path, override with `--config`). See `scrape.example.toml` for format.
 
-```python
-from job_scraper.scraper.greenhouse import scrape_board
-
-scrape = scrape_board("mycompany", name="My Company")
+**Board scrapers** use built-in ATS platform support:
+```toml
+[boards.greenhouse]
+mycompany = "My Company"
 ```
 
-For custom scrapers, implement `async def scrape(http: Http) -> AsyncIterator[Job]`.
-
-To identify a company's ATS platform, follow the "Careers" or "Jobs" link from their website — the job listing URLs reveal the platform (e.g. `boards.greenhouse.io/SLUG`, `jobs.ashbyhq.com/SLUG`, `jobs.lever.co/SLUG`, `ats.rippling.com/SLUG`, `apply.workable.com/SLUG`). Verify the slug works by hitting the platform's API before creating a scraper.
-
-After creating a scraper, test it by running the module directly (no caching, hits the network):
-
-```bash
-python -m job_scraper.scraper.mycompany
+**Custom scrapers** are Python scripts implementing `async def scrape(http: Http) -> AsyncIterator[Job]`:
+```toml
+[custom.mycompany]
+path = "scrapers/mycompany.py"
 ```
 
-When adding a scraper for a new company, also add a company context file at `job_scraper/companies/<canonical-name>.md` (where canonical name is lowercase, non-alphanumeric replaced with hyphens). Company context files should include these sections:
+Or subprocess commands that emit Job JSONL to stdout:
+```toml
+[custom.mycompany]
+command = ["python", "scrapers/mycompany.py"]
+```
+
+To identify a company's ATS platform, follow the "Careers" or "Jobs" link from their website — the job listing URLs reveal the platform (e.g. `boards.greenhouse.io/SLUG`, `jobs.ashbyhq.com/SLUG`, `jobs.lever.co/SLUG`, `ats.rippling.com/SLUG`, `apply.workable.com/SLUG`). Verify the slug works by hitting the platform's API before adding it to config.
+
+### Company context
+
+Company context files improve scoring accuracy. Place `.md` files in the `--companies-dir` directory (default `companies/`). Name files `<canonical-name>.md` (lowercase, non-alphanumeric replaced with hyphens). Include these sections:
 
 - **Overview** — What the company does, when founded, founder(s), HQ location
 - **Technical Focus** — Key technology areas and platforms (bulleted)
@@ -76,7 +89,7 @@ When adding a scraper for a new company, also add a company context file at `job
 - **Hiring** — What roles look like, hiring bar, culture notes
 - **Recent Context** — Latest news, partnerships, product launches
 
-Search the web for up-to-date information. See existing files in `job_scraper/companies/` for examples of proper formatting and length (~30-45 lines, hard-wrapped at ~65 chars).
+Target ~30-45 lines, hard-wrapped at ~65 chars.
 
 ## Keeping docs in sync
 

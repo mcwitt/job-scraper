@@ -16,6 +16,8 @@ let
     ;
   cfg = config.services.job-scraper;
   pkg = cfg.package;
+  tomlFormat = pkgs.formats.toml { };
+  configFile = tomlFormat.generate "scrape.toml" cfg.scrape;
 
   # Strip # comments and blank lines from a keywords string,
   # producing a single FTS5 expression.
@@ -53,6 +55,7 @@ let
       scrapeCmd = concatStringsSep " " [
         "${pkg}/bin/job-scraper"
         "run"
+        "--config ${configFile}"
         "--scrape-only"
         "--status-report"
         "--cache-dir ${stateDir}/cache"
@@ -70,6 +73,7 @@ let
               [
                 "${pkg}/bin/job-scraper"
                 "run"
+                "--config ${configFile}"
                 "--input-jobs ${stateDir}/output/jobs_raw.jsonl"
                 "--report"
                 "--preferences ${files.preferencesFile}"
@@ -88,6 +92,7 @@ let
                 "--init-learning-iters ${toString s.initLearningIters}"
                 "--learning-iters ${toString s.learningIters}"
               ]
+              ++ lib.optional (cfg.companiesDir != null) "--companies-dir ${cfg.companiesDir}"
               ++ lib.optional (
                 ucfg.linkedinConnectionsDir != null
               ) "--linkedin-dir ${ucfg.linkedinConnectionsDir}"
@@ -123,6 +128,22 @@ in
       type = types.package;
       default = flake.packages.${pkgs.system}.default;
       description = "The job-scraper package to use.";
+    };
+
+    scrape = mkOption {
+      type = tomlFormat.type;
+      default = { };
+      description = ''
+        Scraper configuration, generates scrape.toml.
+        Structure mirrors the TOML schema: `boards.<platform>.<slug>`
+        and `custom.<name>`.
+      '';
+    };
+
+    companiesDir = mkOption {
+      type = types.nullOr types.path;
+      default = null;
+      description = "Directory of company context .md files for scoring.";
     };
 
     schedule = mkOption {

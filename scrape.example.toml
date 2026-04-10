@@ -1,0 +1,73 @@
+# Scraper configuration — copy to scrape.toml and edit.
+
+# ── Built-in board scrapers ─────────────────────────────
+# Each section maps ATS slugs to display names.
+# Most platforms only need:  slug = "Display Name"
+#
+# Find a company's slug from their careers/jobs URL:
+#   boards.greenhouse.io/SLUG
+#   jobs.ashbyhq.com/SLUG
+#   jobs.lever.co/SLUG
+#   SLUG.breezy.hr
+#   apply.workable.com/SLUG
+#   api.gem.com/job_board/v0/SLUG/...
+#   ats.rippling.com/SLUG
+#   SLUG.hire.trakstar.com
+
+[boards.greenhouse]
+# anthropic = "Anthropic"
+
+[boards.ashby]
+# openai = "OpenAI"
+
+[boards.lever]
+# anyscale = "Anyscale"
+# For EU-hosted boards, use an inline table:
+# instadeep = { name = "InstaDeep", eu = true }
+
+[boards.workday]
+# Workday always requires instance and site params.
+# Find these from the careers URL pattern:
+#   https://COMPANY.INSTANCE.myworkdayjobs.com/.../SITE/...
+# nvidia = { name = "NVIDIA", instance = "wd5", site = "NVIDIAExternalCareerSite" }
+
+# Any board entry can include cache_ttl (seconds) to override
+# the global --scrape-ttl for that scraper:
+# mycompany = { name = "My Company", cache_ttl = 3600 }
+
+[boards.gem]
+# groq = "Groq"
+
+[boards.rippling]
+# rippling = "Rippling"
+
+[boards.smartrecruiters]
+# aristanetworks = "Arista Networks"
+
+[boards.trakstar]
+# terrapower = "TerraPower"
+
+[boards.workable]
+# huggingface = "Hugging Face"
+
+[boards.icims]
+# "careers.amd.com" = "AMD"
+
+[boards.phenom]
+# "careers.snowflake.com" = "Snowflake"
+
+[boards.breezy]
+# grid-united = "Grid United"
+
+# ── Custom scrapers ─────────────────────────────────────
+# Python scripts that define:
+#   async def scrape(http: Http) -> AsyncIterator[Job]
+#
+# [custom.mycompany]
+# path = "scrapers/mycompany.py"
+# cache_ttl = 3600  # optional per-scraper TTL override
+#
+# Or a subprocess that emits Job JSONL to stdout:
+#
+# [custom.mycompany]
+# command = ["python", "scrapers/mycompany.py"]

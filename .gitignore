@@ -8,6 +8,8 @@ data/
 linkedin/
 
 # Personal config (copy from *.example.* and customize)
+scrape.toml
+/companies/
 preferences.md
 keywords
 resume.md

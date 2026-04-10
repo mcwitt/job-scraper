@@ -18,9 +18,10 @@ import httpx
 import typer
 
 from job_scraper.cache import open_cache
+from job_scraper.config import Config, load_config
 from job_scraper.models import Job, to_dict
 from job_scraper.relevance import filter_relevant
-from job_scraper.scraper import ScrapeFn, discover
+from job_scraper.scraper import ScrapeFn, load_scrapers
 from job_scraper.scraper.http import Http
 
 logger = logging.getLogger("job_scraper.main")
@@ -59,6 +60,8 @@ def _dedup(
 
 
 async def _scrape(
+    config: Config,
+    config_dir: Path,
     cache_dir: Path,
     output_dir: Path,
     scrape_ttl: int,
@@ -66,14 +69,14 @@ async def _scrape(
     only: frozenset[str] | None = None,
     exclude: frozenset[str] | None = None,
 ) -> tuple[list[Job], dict[str, "SourceStatus"]]:
-    """Run scrape phase: discover → scrape → write jobs_raw.jsonl."""
+    """Run scrape phase: load config → scrape → write jobs_raw.jsonl."""
     from job_scraper import status as _status
 
     scrape_cache_path = cache_dir / "scrape.jsonl"
     status_path = cache_dir / "scraper_status.json"
     semaphore = asyncio.Semaphore(max_concurrent)
 
-    scrapers = discover()
+    scrapers = load_scrapers(config, config_dir)
     if only is not None:
         scrapers = [(n, f, t) for n, f, t in scrapers if n in only]
     if exclude is not None:
@@ -230,6 +233,7 @@ async def _init_scoring(
     prep_model: str,
     cache_dir: Path,
     max_concurrent_api: int,
+    companies_dir: Path,
 ) -> tuple["anthropic.AsyncAnthropic", str, str, dict[str, str]]:
     """Shared setup: client, prep artifacts, company context."""
     import anthropic
@@ -242,7 +246,7 @@ async def _init_scoring(
             "preferences is empty path=%s", preferences_path
         )
     resume_text = resume_path.read_text()
-    companies = load_companies()
+    companies = load_companies(companies_dir)
     client = anthropic.AsyncAnthropic()
 
     interest_rubric, candidate_brief = await _generate_prep(
@@ -260,13 +264,14 @@ def _generate_report(
     scored: list["ScoredJob"],
     output_dir: Path,
     linkedin_dir: Path,
+    companies_dir: Path,
 ) -> None:
     from job_scraper.linkedin import load as load_linkedin
     from job_scraper.report import render_report
 
     lookup = load_linkedin(linkedin_dir)
     report_path = output_dir / "report.html"
-    render_report(scored, report_path, lookup=lookup)
+    render_report(scored, report_path, lookup=lookup, companies_dir=companies_dir)
     logger.info("wrote report path=%s", report_path)
 
 
@@ -392,6 +397,8 @@ async def _generate_prep(
 
 
 async def _run(
+    config: Config,
+    config_dir: Path,
     cache_dir: Path,
     output_dir: Path,
     scrape_ttl: int,
@@ -406,6 +413,7 @@ async def _run(
     linkedin_dir: Path,
     dedup_fields: tuple[str, ...],
     resume_path: Path,
+    companies_dir: Path,
     init_num_exploit: int,
     num_explore: int,
     num_exploit: int,
@@ -424,6 +432,7 @@ async def _run(
         raw_jobs = _load_jobs(input_jobs)
     else:
         raw_jobs, statuses = await _scrape(
+            config, config_dir,
             cache_dir, output_dir, scrape_ttl, max_concurrent,
             only=only, exclude=exclude,
         )
@@ -468,6 +477,7 @@ async def _run(
             prep_model,
             cache_dir,
             max_concurrent_api,
+            companies_dir,
         )
     )
 
@@ -613,11 +623,14 @@ async def _run(
     _write_jsonl(scored, output_dir / "jobs.jsonl")
 
     if report:
-        _generate_report(scored, output_dir, linkedin_dir)
+        _generate_report(scored, output_dir, linkedin_dir, companies_dir)
 
 
 @app.command()
 def run(
+    config: Annotated[
+        Path, typer.Option(help="Path to scrape.toml config")
+    ] = Path("scrape.toml"),
     cache_dir: Annotated[Path, typer.Option(help="Cache directory")] = Path(
         "data/cache"
     ),
@@ -660,6 +673,10 @@ def run(
     resume: Annotated[
         Path, typer.Option(help="Path to resume for recruiter scoring")
     ] = Path("resume.md"),
+    companies_dir: Annotated[
+        Path,
+        typer.Option(help="Directory of company context .md files"),
+    ] = Path("companies"),
     dedup_fields: Annotated[
         str,
         typer.Option(help="Comma-separated Job fields for dedup"),
@@ -736,6 +753,8 @@ def run(
         raise typer.BadParameter(
             "--only and --exclude are mutually exclusive"
         )
+    cfg = load_config(config)
+    config_dir = config.resolve().parent
     only_set: frozenset[str] | None = (
         frozenset(s.strip() for s in only.split(","))
         if only
@@ -748,7 +767,7 @@ def run(
     )
     names_to_check = only_set or exclude_set
     if names_to_check:
-        valid = {name for name, _, _ in discover()}
+        valid = cfg.all_names()
         bad = sorted(names_to_check - valid)
         if bad:
             raise typer.BadParameter(
@@ -760,15 +779,17 @@ def run(
             f.strip() for f in dedup_fields.split(",")
         )
         job_attrs = {f.name for f in dataclasses.fields(Job)}
-        bad = [f for f in fields if f not in job_attrs]
-        if bad:
+        bad_fields = [f for f in fields if f not in job_attrs]
+        if bad_fields:
             raise typer.BadParameter(
-                f"Unknown Job fields: {', '.join(bad)}"
+                f"Unknown Job fields: {', '.join(bad_fields)}"
             )
     else:
         fields = ()
     asyncio.run(
         _run(
+            config=cfg,
+            config_dir=config_dir,
             cache_dir=cache_dir,
             output_dir=output_dir,
             scrape_ttl=scrape_ttl,
@@ -783,6 +804,7 @@ def run(
             linkedin_dir=linkedin_dir,
             dedup_fields=fields,
             resume_path=resume,
+            companies_dir=companies_dir,
             scrape_only=scrape_only,
             input_jobs=input_jobs,
             status_report=status_report,
@@ -810,6 +832,7 @@ async def _score_manual(
     input_jobs: Path,
     hashes: list[str],
     keywords: str | None,
+    companies_dir: Path,
 ) -> None:
     from job_scraper.scorer import score_combined
     from job_scraper.surrogate import TrainingData
@@ -837,6 +860,7 @@ async def _score_manual(
             prep_model,
             cache_dir,
             max_concurrent_api,
+            companies_dir,
         )
     )
 
@@ -866,7 +890,7 @@ async def _score_manual(
     _write_jsonl(merged, jobs_path)
 
     if report:
-        _generate_report(merged, output_dir, linkedin_dir)
+        _generate_report(merged, output_dir, linkedin_dir, companies_dir)
 
 
 @app.command()
@@ -902,6 +926,12 @@ def score(
             help="Path to resume for recruiter scoring"
         ),
     ] = Path("resume.md"),
+    companies_dir: Annotated[
+        Path,
+        typer.Option(
+            help="Directory of company context .md files"
+        ),
+    ] = Path("companies"),
     max_concurrent_api: Annotated[
         int,
         typer.Option(
@@ -944,6 +974,7 @@ def score(
             input_jobs=input_jobs,
             hashes=hashes,
             keywords=keywords,
+            companies_dir=companies_dir,
         )
     )
 

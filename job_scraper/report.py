@@ -328,8 +328,9 @@ def _no_connections(
 
 def _build_company_ctx(
     jobs: list[ScoredJob],
+    companies_dir: Path,
 ) -> dict[str, Markup]:
-    canonical = load_companies()
+    canonical = load_companies(companies_dir)
     md = mistune.create_markdown()
     ctx: dict[str, Markup] = {}
     for job in jobs:
@@ -346,6 +347,7 @@ def render_report(
     jobs: list[ScoredJob],
     path: Path,
     lookup: LookupFn | None = None,
+    companies_dir: Path = Path("companies"),
 ) -> None:
     env = Environment(autoescape=True)
     template = env.from_string(TEMPLATE)
@@ -358,7 +360,7 @@ def render_report(
         time_ago=_time_ago,
         epoch=_epoch,
         lookup=lookup or _no_connections,
-        company_ctx=_build_company_ctx(jobs),
+        company_ctx=_build_company_ctx(jobs, companies_dir),
         base_css=BASE_CSS,
         base_js=BASE_JS,
     )
