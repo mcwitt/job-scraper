@@ -13,6 +13,7 @@
 #   api.gem.com/job_board/v0/SLUG/...
 #   ats.rippling.com/SLUG
 #   SLUG.hire.trakstar.com
+#   careers.kula.ai/SLUG
 
 [boards.greenhouse]
 # anthropic = "Anthropic"
@@ -58,6 +59,9 @@
 
 [boards.breezy]
 # grid-united = "Grid United"
+
+[boards.kula]
+# archetype-ai = "Archetype AI"
 
 # ── Custom scrapers ─────────────────────────────────────
 # Python scripts that define:

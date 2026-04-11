@@ -51,6 +51,7 @@ Key files:
 - `job_scraper/scraper/trakstar.py` — Trakstar Hire `scrape_board()` factory
 - `job_scraper/scraper/workable.py` — Workable `scrape_board()` factory
 - `job_scraper/scraper/breezy.py` — Breezy `scrape_board()` factory
+- `job_scraper/scraper/kula.py` — Kula `scrape_board()` factory
 - `scrape.example.toml` — example scraper config
 - `preferences.md` — candidate job preferences for interest scoring; copy from `preferences.example.md`
 - `resume.md` — candidate resume for recruiter scoring; copy from `resume.example.md`
