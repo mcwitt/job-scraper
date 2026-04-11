@@ -1,8 +1,8 @@
 # Scraper configuration — copy to scrape.toml and edit.
 
 # ── Built-in board scrapers ─────────────────────────────
-# Each section maps ATS slugs to display names.
-# Most platforms only need:  slug = "Display Name"
+# Each section maps ATS slugs to a table with at least a
+# `name` key and an optional `cache_ttl` (seconds).
 #
 # Find a company's slug from their careers/jobs URL:
 #   boards.greenhouse.io/SLUG
@@ -16,14 +16,14 @@
 #   careers.kula.ai/SLUG
 
 [boards.greenhouse]
-# anthropic = "Anthropic"
+# anthropic.name = "Anthropic"
 
 [boards.ashby]
-# openai = "OpenAI"
+# openai.name = "OpenAI"
 
 [boards.lever]
-# anyscale = "Anyscale"
-# For EU-hosted boards, use an inline table:
+# anyscale.name = "Anyscale"
+# For EU-hosted boards:
 # instadeep = { name = "InstaDeep", eu = true }
 
 [boards.workday]
@@ -37,31 +37,31 @@
 # mycompany = { name = "My Company", cache_ttl = 3600 }
 
 [boards.gem]
-# groq = "Groq"
+# groq.name = "Groq"
 
 [boards.rippling]
-# rippling = "Rippling"
+# rippling.name = "Rippling"
 
 [boards.smartrecruiters]
-# aristanetworks = "Arista Networks"
+# aristanetworks.name = "Arista Networks"
 
 [boards.trakstar]
-# terrapower = "TerraPower"
+# terrapower.name = "TerraPower"
 
 [boards.workable]
-# huggingface = "Hugging Face"
+# huggingface.name = "Hugging Face"
 
 [boards.icims]
-# "careers.amd.com" = "AMD"
+# "careers.amd.com".name = "AMD"
 
 [boards.phenom]
-# "careers.snowflake.com" = "Snowflake"
+# "careers.snowflake.com".name = "Snowflake"
 
 [boards.breezy]
-# grid-united = "Grid United"
+# grid-united.name = "Grid United"
 
 [boards.kula]
-# archetype-ai = "Archetype AI"
+# archetype-ai.name = "Archetype AI"
 
 # ── Custom scrapers ─────────────────────────────────────
 # Python scripts that define:

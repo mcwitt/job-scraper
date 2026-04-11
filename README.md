@@ -104,10 +104,10 @@ Scrapers are configured in `scrape.toml`. There are two types:
 
 ```toml
 [boards.greenhouse]
-anthropic = "Anthropic"
+anthropic.name = "Anthropic"
 
 [boards.ashby]
-openai = "OpenAI"
+openai.name = "OpenAI"
 
 [boards.workday]
 nvidia = { name = "NVIDIA", instance = "wd5", site = "NVIDIAExternalCareerSite" }
@@ -156,7 +156,7 @@ To scrape a company's job board, find their careers URL and identify the ATS pla
 
 ```toml
 [boards.greenhouse]
-mycompany = "My Company"
+mycompany.name = "My Company"
 ```
 
 For custom scrapers that don't use a supported ATS, create a Python script:
@@ -236,10 +236,10 @@ Add the flake as an input and import the module:
 
             scrape = {
               boards.greenhouse = {
-                anthropic = "Anthropic";
+                anthropic.name = "Anthropic";
               };
               boards.ashby = {
-                openai = "OpenAI";
+                openai.name = "OpenAI";
               };
               boards.workday = {
                 nvidia = { name = "NVIDIA"; instance = "wd5"; site = "NVIDIAExternalCareerSite"; };

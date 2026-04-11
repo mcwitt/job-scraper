@@ -50,30 +50,28 @@ def _parse_board_section(
 ) -> list[BoardEntry]:
     entries: list[BoardEntry] = []
     for slug, val in raw.items():
-        if isinstance(val, str):
-            entries.append(BoardEntry(slug=slug, name=val))
-        elif isinstance(val, dict):
-            name = val["name"]
-            ttl = val.get("cache_ttl")
-            extra = {
-                k: v
-                for k, v in val.items()
-                if k not in ("name", "cache_ttl")
-            }
-            entries.append(
-                BoardEntry(
-                    slug=slug,
-                    name=name,
-                    extra=extra,
-                    cache_ttl=ttl,
-                )
-            )
-        else:
+        if not isinstance(val, dict):
             msg = (
-                f"boards.{platform}.{slug}: expected string"
-                f" or table, got {type(val).__name__}"
+                f"boards.{platform}.{slug}: expected table"
+                f" (e.g. {{name = ...}}), got"
+                f" {type(val).__name__}"
             )
             raise ValueError(msg)
+        name = val["name"]
+        ttl = val.get("cache_ttl")
+        extra = {
+            k: v
+            for k, v in val.items()
+            if k not in ("name", "cache_ttl")
+        }
+        entries.append(
+            BoardEntry(
+                slug=slug,
+                name=name,
+                extra=extra,
+                cache_ttl=ttl,
+            )
+        )
     return entries
 
 

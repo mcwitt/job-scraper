@@ -63,7 +63,7 @@ Scrapers are configured in `scrape.toml` (default path, override with `--config`
 **Board scrapers** use built-in ATS platform support:
 ```toml
 [boards.greenhouse]
-mycompany = "My Company"
+mycompany.name = "My Company"
 ```
 
 **Custom scrapers** are Python scripts implementing `async def scrape(http: Http) -> AsyncIterator[Job]`:
