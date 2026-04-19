@@ -18,6 +18,11 @@ from job_scraper.linkedin import (
     SecondDegree,
 )
 from job_scraper.models import ScoredJob
+from job_scraper.store import (
+    DEFAULT_WARN_AFTER_SECONDS,
+    is_stale,
+    parse_iso,
+)
 
 TEMPLATE = """\
 <!DOCTYPE html>
@@ -32,6 +37,9 @@ TEMPLATE = """\
   .narrow { padding-left: 0.3rem;
     padding-right: 0.3rem; text-align: center;
     white-space: nowrap; }
+  .status { padding-left: 0.2rem;
+    padding-right: 0.2rem; text-align: center;
+    white-space: nowrap; width: 1.5rem; }
   .tip { position: relative; cursor: help; }
   .tip .tip-body { display: none;
     position: absolute; left: 0; top: 100%;
@@ -113,6 +121,8 @@ TEMPLATE = """\
       <th class="narrow"
         title="Fit for role">Fit</th>
       <th data-sort-desc>Posted</th>
+      <th class="status"
+        title="Stale data warnings"></th>
       <th data-search>Title</th>
       <th data-search>Company</th>
       <th title="1st-degree connections">1st</th>
@@ -120,7 +130,7 @@ TEMPLATE = """\
       <th data-search>Team</th>
       <th data-search>Location</th>
       <th data-search>Compensation</th>
-      <th>Scraped</th>
+      <th>Last seen</th>
     </tr>
   </thead>
   <tbody>
@@ -162,6 +172,13 @@ TEMPLATE = """\
           title="{{ job.posted }}">
           {{- time_ago(job.posted) -}}
         </span>{% endif %}</td>
+      <td class="status"
+        data-sort="{{ 1 if is_stale(job.last_seen_at) else 0 }}">
+        {% if is_stale(job.last_seen_at) %}
+        <span title="Not observed in the last
+{{ time_ago(job.last_seen_at) }}.
+Showing cached record.">⚠️</span>
+        {% endif %}</td>
       <td class="cell">
         <a href="{{ job.url }}">
           {{- job.title -}}
@@ -219,9 +236,9 @@ TEMPLATE = """\
         {{ job.location or "" }}</td>
       <td class="cell">{{ job.comp or "" }}</td>
       <td class="date"
-        data-sort="{{ epoch(job.scraped_at) }}"
-        title="{{ job.scraped_at }}">
-        {{ time_ago(job.scraped_at) }}</td>
+        data-sort="{{ epoch(job.last_seen_at) }}"
+        title="{{ job.last_seen_at }}">
+        {{ time_ago(job.last_seen_at) }}</td>
     </tr>
     {% endfor %}
   </tbody>
@@ -279,6 +296,7 @@ document.addEventListener('click', function() {
     {name: 'Interest', on: false},
     {name: 'Fit', on: false},
     {name: 'Posted', on: true},
+    {name: 'Status', on: true},
     {name: 'Title', on: true},
     {name: 'Company', on: true},
     {name: '1st', on: true},
@@ -286,7 +304,7 @@ document.addEventListener('click', function() {
     {name: 'Team', on: false},
     {name: 'Location', on: false},
     {name: 'Compensation', on: false},
-    {name: 'Scraped', on: false}
+    {name: 'Last seen', on: false}
   ], 'job-scraper-cols');
   initSort(function() { showPage(0); });
   showPage(0);
@@ -301,9 +319,7 @@ def _date_class(date_str: str | None) -> str:
     if not date_str:
         return ""
     try:
-        dt = datetime.fromisoformat(date_str).replace(
-            tzinfo=UTC
-        )
+        dt = parse_iso(date_str)
     except ValueError:
         return ""
     days = (datetime.now(UTC) - dt).days
@@ -348,19 +364,21 @@ def render_report(
     path: Path,
     lookup: LookupFn | None = None,
     companies_dir: Path = Path("companies"),
+    warn_after_seconds: int = DEFAULT_WARN_AFTER_SECONDS,
 ) -> None:
     env = Environment(autoescape=True)
     template = env.from_string(TEMPLATE)
-    now = datetime.now(UTC).isoformat()
+    now_dt = datetime.now(UTC)
     html = template.render(
         jobs=jobs,
-        generated_at=now,
+        generated_at=now_dt.isoformat(),
         score_class=_score_class,
         date_class=_date_class,
         time_ago=_time_ago,
         epoch=_epoch,
         lookup=lookup or _no_connections,
         company_ctx=_build_company_ctx(jobs, companies_dir),
+        is_stale=lambda ts: is_stale(ts, now_dt, warn_after_seconds),
         base_css=BASE_CSS,
         base_js=BASE_JS,
     )

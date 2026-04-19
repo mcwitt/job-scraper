@@ -100,7 +100,6 @@ def scrape_board(token: str, *, name: str):
                 location=location,
                 description=description,
                 source=f"kula:{token}",
-                scraped_at=resp.fetched_at,
             )
 
     return scrape

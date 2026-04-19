@@ -9,7 +9,7 @@ class Job:
     url: str
     description: str
     source: str
-    scraped_at: str
+    last_seen_at: str = ""
     team: str | None = None
     posted: str | None = None
     comp: str | None = None
@@ -56,9 +56,9 @@ class ScoredJob:
     url: str
     description: str
     source: str
-    scraped_at: str
     score_interest: Interest
     score_fit: Fit
+    last_seen_at: str = ""
     team: str | None = None
     posted: str | None = None
     comp: str | None = None

@@ -81,7 +81,6 @@ def scrape_board(slug: str, *, name: str):
                 location=location,
                 description=description,
                 source=f"trakstar:{slug}",
-                scraped_at=resp.fetched_at,
             )
 
     return scrape

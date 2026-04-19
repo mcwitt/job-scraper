@@ -17,6 +17,7 @@ import dacite
 import httpx
 import typer
 
+from job_scraper import store
 from job_scraper.cache import open_cache
 from job_scraper.config import Config, load_config
 from job_scraper.models import Job, to_dict
@@ -64,12 +65,13 @@ async def _scrape(
     config_dir: Path,
     cache_dir: Path,
     output_dir: Path,
+    state_dir: Path,
     scrape_ttl: int,
     max_concurrent: int,
+    retain_for_seconds: int,
     only: frozenset[str] | None = None,
     exclude: frozenset[str] | None = None,
 ) -> tuple[list[Job], dict[str, "SourceStatus"]]:
-    """Run scrape phase: load config → scrape → write jobs_raw.jsonl."""
     from job_scraper import status as _status
 
     scrape_cache_path = cache_dir / "scrape.jsonl"
@@ -154,9 +156,22 @@ async def _scrape(
     _status.save(status_path, statuses)
     logger.info("saved scraper status path=%s", status_path)
 
-    _write_jsonl(all_jobs, output_dir / "jobs_raw.jsonl")
+    store_path = state_dir / "jobs_store.jsonl"
+    prev = store.load(store_path)
+    new_store = store.upsert_and_evict(
+        prev, all_jobs, datetime.now(UTC), retain_for_seconds
+    )
+    store.save(store_path, new_store)
+    fresh_count = len({j.hash for j in all_jobs})
+    logger.info(
+        "store path=%s fresh=%d carried=%d total=%d",
+        store_path,
+        fresh_count,
+        len(new_store) - fresh_count,
+        len(new_store),
+    )
 
-    return all_jobs, statuses
+    return list(new_store.values()), statuses
 
 
 def _dedup_and_filter(
@@ -265,13 +280,20 @@ def _generate_report(
     output_dir: Path,
     linkedin_dir: Path,
     companies_dir: Path,
+    warn_after_seconds: int,
 ) -> None:
     from job_scraper.linkedin import load as load_linkedin
     from job_scraper.report import render_report
 
     lookup = load_linkedin(linkedin_dir)
     report_path = output_dir / "report.html"
-    render_report(scored, report_path, lookup=lookup, companies_dir=companies_dir)
+    render_report(
+        scored,
+        report_path,
+        lookup=lookup,
+        companies_dir=companies_dir,
+        warn_after_seconds=warn_after_seconds,
+    )
     logger.info("wrote report path=%s", report_path)
 
 
@@ -401,7 +423,10 @@ async def _run(
     config_dir: Path,
     cache_dir: Path,
     output_dir: Path,
+    state_dir: Path,
     scrape_ttl: int,
+    retain_for_seconds: int,
+    warn_after_seconds: int,
     model: str,
     prep_model: str,
     preferences_path: Path,
@@ -432,9 +457,16 @@ async def _run(
         raw_jobs = _load_jobs(input_jobs)
     else:
         raw_jobs, statuses = await _scrape(
-            config, config_dir,
-            cache_dir, output_dir, scrape_ttl, max_concurrent,
-            only=only, exclude=exclude,
+            config,
+            config_dir,
+            cache_dir,
+            output_dir,
+            state_dir,
+            scrape_ttl,
+            max_concurrent,
+            retain_for_seconds,
+            only=only,
+            exclude=exclude,
         )
         if status_report:
             from job_scraper.status_report import (
@@ -623,7 +655,13 @@ async def _run(
     _write_jsonl(scored, output_dir / "jobs.jsonl")
 
     if report:
-        _generate_report(scored, output_dir, linkedin_dir, companies_dir)
+        _generate_report(
+            scored,
+            output_dir,
+            linkedin_dir,
+            companies_dir,
+            warn_after_seconds,
+        )
 
 
 @app.command()
@@ -637,9 +675,26 @@ def run(
     output_dir: Annotated[Path, typer.Option(help="Output directory")] = Path(
         "data/output"
     ),
+    state_dir: Annotated[
+        Path, typer.Option(help="Persistent state directory")
+    ] = Path("data/state"),
     scrape_ttl: Annotated[
         int, typer.Option(help="Scrape cache TTL in seconds")
     ] = 86400,
+    retain_for_seconds: Annotated[
+        int,
+        typer.Option(
+            help="Carry forward unobserved jobs for this many"
+            " seconds before evicting (0 disables retention)"
+        ),
+    ] = store.DEFAULT_RETAIN_FOR_SECONDS,
+    warn_after_seconds: Annotated[
+        int,
+        typer.Option(
+            help="Flag jobs as stale in the report if not"
+            " observed within this many seconds"
+        ),
+    ] = store.DEFAULT_WARN_AFTER_SECONDS,
     model: Annotated[
         str, typer.Option(help="Claude model for scoring")
     ] = "claude-haiku-4-5",
@@ -685,7 +740,7 @@ def run(
         bool,
         typer.Option(
             "--scrape-only",
-            help="Scrape only, write jobs_raw.jsonl",
+            help="Scrape only, update the jobs store and exit",
         ),
     ] = False,
     input_jobs: Annotated[
@@ -792,7 +847,10 @@ def run(
             config_dir=config_dir,
             cache_dir=cache_dir,
             output_dir=output_dir,
+            state_dir=state_dir,
             scrape_ttl=scrape_ttl,
+            retain_for_seconds=retain_for_seconds,
+            warn_after_seconds=warn_after_seconds,
             model=model,
             prep_model=prep_model,
             preferences_path=preferences,
@@ -833,6 +891,7 @@ async def _score_manual(
     hashes: list[str],
     keywords: str | None,
     companies_dir: Path,
+    warn_after_seconds: int,
 ) -> None:
     from job_scraper.scorer import score_combined
     from job_scraper.surrogate import TrainingData
@@ -890,7 +949,13 @@ async def _score_manual(
     _write_jsonl(merged, jobs_path)
 
     if report:
-        _generate_report(merged, output_dir, linkedin_dir, companies_dir)
+        _generate_report(
+            merged,
+            output_dir,
+            linkedin_dir,
+            companies_dir,
+            warn_after_seconds,
+        )
 
 
 @app.command()
@@ -902,7 +967,7 @@ def score(
     input_jobs: Annotated[
         Path,
         typer.Option(help="JSONL file to select jobs from"),
-    ] = Path("data/output/jobs_raw.jsonl"),
+    ] = Path("data/state/jobs_store.jsonl"),
     cache_dir: Annotated[
         Path, typer.Option(help="Cache directory")
     ] = Path("data/cache"),
@@ -952,6 +1017,13 @@ def score(
             " jobs (e.g. 'title:engineer')"
         ),
     ] = None,
+    warn_after_seconds: Annotated[
+        int,
+        typer.Option(
+            help="Flag jobs as stale in the report if not"
+            " observed within this many seconds"
+        ),
+    ] = store.DEFAULT_WARN_AFTER_SECONDS,
 ) -> None:
     """Score specific jobs by hash or keywords filter."""
     hashes = hash or []
@@ -975,6 +1047,7 @@ def score(
             hashes=hashes,
             keywords=keywords,
             companies_dir=companies_dir,
+            warn_after_seconds=warn_after_seconds,
         )
     )
 

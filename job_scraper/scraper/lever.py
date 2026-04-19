@@ -63,7 +63,6 @@ def scrape_board(company: str, *, name: str, eu: bool = False):
                 location=location,
                 description=description,
                 source=f"lever:{company}",
-                scraped_at=resp.fetched_at,
             )
 
     return scrape

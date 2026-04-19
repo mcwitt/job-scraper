@@ -148,7 +148,6 @@ def scrape_board(company: str, *, name: str):
                 location=location,
                 description=description,
                 source=f"smartrecruiters:{company}",
-                scraped_at=first_resp.fetched_at,
             )
 
     return scrape

@@ -22,7 +22,7 @@ python -m job_scraper.main score --hash abc123
 
 ## Architecture
 
-**Pipeline:** scrape → dedupe → keywords boolean filter → prep (interest rubric + candidate brief) → active learning (similarity seed + explore/exploit loop) → surrogate ranking → sort → output
+**Pipeline:** scrape → upsert/evict store → dedupe → keywords boolean filter → prep (interest rubric + candidate brief) → active learning (similarity seed + explore/exploit loop) → surrogate ranking → sort → output
 
 Key files:
 - `job_scraper/main.py` — CLI (Typer) and pipeline orchestration
@@ -34,6 +34,7 @@ Key files:
 - `job_scraper/llm.py` — cached Claude API wrapper (`create()` with cache-through)
 - `job_scraper/companies/` — `canonicalize`/`load_companies` (loads `.md` files from configurable directory)
 - `job_scraper/cache.py` — JSONL append-log cache with TTL
+- `job_scraper/store.py` — persistent per-job store with retention (`data/state/jobs_store.jsonl`); carries forward unobserved jobs for `--retain-for-seconds`
 - `job_scraper/models.py` — Job/ScoredJob/Interest/Fit frozen dataclasses
 - `job_scraper/report.py` — HTML report (Jinja2)
 - `job_scraper/scraper/__init__.py` — `ScrapeFn` type, `load_scrapers()` config-driven loader

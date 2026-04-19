@@ -60,7 +60,9 @@ let
         "--status-report"
         "--cache-dir ${stateDir}/cache"
         "--output-dir ${stateDir}/output"
+        "--state-dir ${stateDir}/state"
         "--scrape-ttl ${toString s.scrapeTtl}"
+        "--retain-for-seconds ${toString s.retainForSeconds}"
         "--max-concurrent ${toString s.maxConcurrent}"
       ];
       userCmds = concatStringsSep "\n" (
@@ -74,7 +76,7 @@ let
                 "${pkg}/bin/job-scraper"
                 "run"
                 "--config ${configFile}"
-                "--input-jobs ${stateDir}/output/jobs_raw.jsonl"
+                "--input-jobs ${stateDir}/state/jobs_store.jsonl"
                 "--report"
                 "--preferences ${files.preferencesFile}"
                 "--resume ${files.resumeFile}"
@@ -85,6 +87,7 @@ let
                 "--model ${s.model}"
                 "--prep-model ${s.prepModel}"
                 "--dedup-fields ${s.dedupFields}"
+                "--warn-after-seconds ${toString s.warnAfterSeconds}"
                 "--max-concurrent-api ${toString s.maxConcurrentApi}"
                 "--init-num-exploit ${toString s.initNumExploit}"
                 "--num-explore ${toString s.numExplore}"
@@ -110,7 +113,7 @@ let
     in
     ''
       set -euo pipefail
-      mkdir -p "${stateDir}/cache" "${stateDir}/output"
+      mkdir -p "${stateDir}/cache" "${stateDir}/output" "${stateDir}/state"
       echo "Starting scrape phase"
       ${scrapeCmd}
       echo "Scrape complete, starting per-user scoring"
@@ -186,6 +189,23 @@ in
         default = 86400;
         description = "Scrape cache TTL in seconds.";
       };
+      retainForSeconds = mkOption {
+        type = types.int;
+        default = 604800;
+        description = ''
+          Carry forward unobserved jobs for this many seconds
+          before evicting them from the store. 0 disables
+          retention.
+        '';
+      };
+      warnAfterSeconds = mkOption {
+        type = types.int;
+        default = 172800;
+        description = ''
+          Flag jobs in the report as stale (⚠️) if not observed
+          within this many seconds.
+        '';
+      };
       dedupFields = mkOption {
         type = types.str;
         default = "title,company,team,description";
@@ -223,9 +243,9 @@ in
       readOnly = true;
       default = "${stateDir}/output";
       description = ''
-        Read-only. Shared output directory containing jobs_raw.jsonl
-        and status.html. Use this to configure downstream services
-        (e.g. nginx).
+        Read-only. Shared output directory containing status.html
+        and scraper_errors.jsonl. Use this to configure downstream
+        services (e.g. nginx).
       '';
     };
 

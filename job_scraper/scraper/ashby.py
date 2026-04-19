@@ -45,7 +45,6 @@ def scrape_board(board: str, *, name: str):
                 location=location,
                 description=description,
                 source=f"ashby:{board}",
-                scraped_at=resp.fetched_at,
             )
 
     return scrape

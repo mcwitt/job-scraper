@@ -66,7 +66,6 @@ def scrape_board(domain: str, *, name: str):
                     location=location,
                     description=description,
                     source=f"icims:{domain}",
-                    scraped_at=resp.fetched_at,
                 )
             page += 1
 

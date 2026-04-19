@@ -73,7 +73,6 @@ def scrape_board(board: str, *, name: str):
                 location=loc_str,
                 description=description,
                 source=f"workable:{board}",
-                scraped_at=resp.fetched_at,
             )
 
     return scrape

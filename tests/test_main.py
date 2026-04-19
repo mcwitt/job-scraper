@@ -42,7 +42,6 @@ def _job(
         url="https://example.com",
         description="desc",
         source="test",
-        scraped_at="2025-01-01",
         **kw,
     )
 

@@ -87,10 +87,16 @@ python -m job_scraper.main score --hash abc123 --hash def456
 ```
 
 Output goes to `data/output` by default:
-- `jobs_raw.jsonl` — all scraped jobs before filtering
 - `jobs_surrogate.jsonl` — all filtered jobs with surrogate scores
 - `jobs.jsonl` — final ranked output
 - `report.html` — interactive HTML report (with `--report`)
+
+Persistent state lives in `data/state`:
+- `jobs_store.jsonl` — every recently-observed job, keyed by hash.
+  Carried forward across runs for `--retain-for-seconds` so a
+  failing scraper doesn't immediately disappear from the report.
+  Jobs not observed within `--warn-after-seconds` are flagged with
+  ⚠️ in the report.
 
 ## Architecture
 

@@ -101,7 +101,6 @@ def scrape_board(domain: str, *, name: str):
                 location=location,
                 description=description,
                 source=f"phenom:{domain}",
-                scraped_at=resp.fetched_at,
             )
 
     return scrape

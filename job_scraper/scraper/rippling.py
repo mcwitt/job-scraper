@@ -71,7 +71,6 @@ def scrape_board(slug: str, *, name: str):
                 location=location,
                 description=description,
                 source=f"rippling:{slug}",
-                scraped_at=detail_resp.fetched_at,
             )
 
     return scrape

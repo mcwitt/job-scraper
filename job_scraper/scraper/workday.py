@@ -33,11 +33,8 @@ def scrape_board(company: str, instance: str, site: str, *, name: str):
         http: Http,
         offset: int,
         facets: dict[str, list[str]],
-    ) -> tuple[dict, str, list[dict]]:
-        """POST the jobs endpoint.
-
-        Returns (body, fetched_at, postings).
-        """
+    ) -> tuple[dict, list[dict]]:
+        """POST the jobs endpoint. Returns (body, postings)."""
         try:
             resp = await http.post(
                 jobs_url,
@@ -49,16 +46,14 @@ def scrape_board(company: str, instance: str, site: str, *, name: str):
                 },
             )
             body = json.loads(resp.body)
-            return body, resp.fetched_at, body.get(
-                "jobPostings", []
-            )
+            return body, body.get("jobPostings", [])
         except Exception:
             logger.warning(
                 "company=%s offset=%d page_error=true",
                 name,
                 offset,
             )
-            return {}, "", []
+            return {}, []
 
     def _to_stub(posting: dict) -> Stub:
         return (
@@ -72,7 +67,7 @@ def scrape_board(company: str, instance: str, site: str, *, name: str):
         facets: dict[str, list[str]],
     ) -> list[Stub]:
         """Fully paginate a query that fits under the API cap."""
-        body, _, first_postings = await _post(http, 0, facets)
+        body, first_postings = await _post(http, 0, facets)
         total = body.get("total", 0)
         stubs = [_to_stub(p) for p in first_postings]
 
@@ -81,7 +76,7 @@ def scrape_board(company: str, instance: str, site: str, *, name: str):
                 _post(http, off, facets)
                 for off in range(_PAGE_SIZE, total, _PAGE_SIZE)
             ))
-            for _, _, postings in pages:
+            for _, postings in pages:
                 stubs.extend(_to_stub(p) for p in postings)
 
         return stubs
@@ -110,7 +105,7 @@ def scrape_board(company: str, instance: str, site: str, *, name: str):
     ) -> list[Stub]:
         """Recursively collect stubs, subdividing by facets when
         results hit the API cap."""
-        body, _, _ = await _post(http, 0, facets)
+        body, _ = await _post(http, 0, facets)
         total = body.get("total", 0)
 
         if total < _API_CAP:
@@ -169,7 +164,7 @@ def scrape_board(company: str, instance: str, site: str, *, name: str):
         return all_stubs
 
     async def scrape(http: Http) -> AsyncIterator[Job]:
-        body, scraped_at_ts, _ = await _post(http, 0, {})
+        body, _ = await _post(http, 0, {})
         total = body.get("total", 0)
         logger.info("company=%s listings=%d", name, total)
 
@@ -259,7 +254,6 @@ def scrape_board(company: str, instance: str, site: str, *, name: str):
                 location=detail_loc or listing_loc,
                 description=description,
                 source=f"workday:{company}",
-                scraped_at=scraped_at_ts,
             )
 
     return scrape

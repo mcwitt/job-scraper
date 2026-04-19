@@ -2,6 +2,8 @@
 
 from datetime import UTC, datetime
 
+from job_scraper.store import parse_iso
+
 BASE_CSS = """\
 :root {
   --bg: #f5f5f5; --fg: #111; --table-bg: white;
@@ -309,9 +311,7 @@ def _time_ago(date_str: str | None) -> str:
     if not date_str:
         return ""
     try:
-        dt = datetime.fromisoformat(date_str).replace(
-            tzinfo=UTC
-        )
+        dt = parse_iso(date_str)
     except ValueError:
         return date_str
     delta = datetime.now(UTC) - dt
@@ -351,9 +351,6 @@ def _epoch(date_str: str | None) -> int:
     if not date_str:
         return 0
     try:
-        dt = datetime.fromisoformat(date_str).replace(
-            tzinfo=UTC
-        )
-        return int(dt.timestamp())
+        return int(parse_iso(date_str).timestamp())
     except ValueError:
         return 0
