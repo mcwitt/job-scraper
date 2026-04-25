@@ -81,9 +81,10 @@ python -m job_scraper.main run --scrape-only --only anthropic,openai
 # Run all scrapers except specific ones
 python -m job_scraper.main run --exclude salesforce,crowdstrike
 
-# Score specific jobs manually (by keywords or hash)
-python -m job_scraper.main score --keywords "company:stripe" --report
-python -m job_scraper.main score --hash abc123 --hash def456
+# Force-score jobs matching an FTS5 expression, regardless of
+# the active-learning loop. Bypasses --keywords. Useful for
+# always scoring jobs at companies you're interested in.
+python -m job_scraper.main run --force-score-keywords "company:stripe"
 ```
 
 Output goes to `data/output` by default:
@@ -209,6 +210,10 @@ Pass a [SQLite FTS5 query expression](https://www.sqlite.org/fts5.html#full_text
 
 Syntax: `"phrases"`, `AND`/`OR`/`NOT`, `(grouping)`. Prefix terms with `title:` or `description:` to restrict matching to that column.
 
+### `--force-score-keywords` — unconditional LLM scoring
+
+Pass an FTS5 expression via `--force-score-keywords` to force LLM scoring of matching jobs regardless of what the active-learning loop selects. The expression is matched against the full deduped set, bypassing `--keywords`, so jobs you're always interested in (e.g. `company:stripe`) get scored even when they don't match your pre-filter.
+
 ### `preferences.md` — interest scoring
 
 Describes what you're looking for in your next role: target titles, ideal characteristics, hard constraints, and location preferences. The prep model reads this once to produce a candidate-specific interest rubric with concrete scoring bands. The rubric is then used to score each job consistently.
@@ -265,6 +270,12 @@ Add the flake as an input and import the module:
               preferences = builtins.readFile ./alice/preferences.md;
               resume = builtins.readFile ./alice/resume.md;
               keywords = builtins.readFile ./alice/keywords;
+              # Always score jobs matching any of these FTS5 expressions,
+              # regardless of what the active-learning loop selects.
+              forceScoreFilters = [
+                "company:stripe"
+                "company:anthropic AND title:engineer"
+              ];
               linkedinConnectionsDir = ./alice/linkedin;
             };
           };

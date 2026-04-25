@@ -29,6 +29,13 @@ logger = logging.getLogger("job_scraper.main")
 app = typer.Typer()
 
 
+# Force Typer to keep `run` as a named subcommand even though
+# it's the only one (otherwise Typer collapses to a root-only CLI).
+@app.callback()
+def _cli() -> None:
+    """Job scraper: scrape and score job postings."""
+
+
 def _load_jobs(path: Path) -> list[Job]:
     """Load Job objects from a JSONL file."""
     jobs: list[Job] = []
@@ -174,22 +181,38 @@ async def _scrape(
     return list(new_store.values()), statuses
 
 
-def _dedup_and_filter(
+def _select_jobs(
     jobs: list[Job],
     dedup_fields: tuple[str, ...],
     keywords: str | None,
-) -> list[Job]:
-    """Dedup and keyword-filter jobs (pure)."""
+    force_keywords: str | None,
+) -> tuple[list[Job], list[Job]]:
+    """Dedup and partition jobs (pure).
+
+    Returns (universe, forced) where:
+      - universe = (deduped & keywords) | forced. The output set;
+        also the candidate pool for active learning + surrogate.
+      - forced = deduped & force_keywords. LLM-scored
+        unconditionally, bypassing the keywords pre-filter.
+    """
     deduped = _dedup(jobs, dedup_fields)
-    if not keywords:
-        return deduped
-    filtered = filter_relevant(keywords, deduped)
-    logger.info(
-        "keyword filter total=%d matched=%d",
-        len(deduped),
-        len(filtered),
-    )
-    return filtered
+    if keywords:
+        filtered = filter_relevant(keywords, deduped)
+        logger.info(
+            "keyword filter total=%d matched=%d",
+            len(deduped),
+            len(filtered),
+        )
+    else:
+        filtered = deduped
+    if not force_keywords:
+        return filtered, []
+    forced = filter_relevant(force_keywords, deduped)
+    logger.info("force-score filter matched=%d", len(forced))
+    by_hash = {j.hash: j for j in filtered}
+    for j in forced:
+        by_hash.setdefault(j.hash, j)
+    return list(by_hash.values()), forced
 
 
 def _write_jsonl(
@@ -221,25 +244,6 @@ def _score_to_examples(
         for job in jobs
         if job.hash in results
     ]
-
-
-def _merge_scored_jobs(
-    existing_path: Path, new: list["ScoredJob"]
-) -> list["ScoredJob"]:
-    """Merge new scored jobs into existing output, deduping."""
-    from job_scraper.models import ScoredJob
-
-    existing: list[ScoredJob] = []
-    if existing_path.exists():
-        with existing_path.open() as f:
-            for line in f:
-                existing.append(
-                    dacite.from_dict(ScoredJob, json.loads(line))
-                )
-    by_hash = {j.hash: j for j in existing}
-    for j in new:
-        by_hash[j.hash] = j
-    return sorted(by_hash.values(), key=_priority, reverse=True)
 
 
 async def _init_scoring(
@@ -435,6 +439,7 @@ async def _run(
     skip_score: bool,
     report: bool,
     keywords: str | None,
+    force_score_keywords: str | None,
     linkedin_dir: Path,
     dedup_fields: tuple[str, ...],
     resume_path: Path,
@@ -485,8 +490,9 @@ async def _run(
         logger.warning("no jobs to process")
         return
 
-    # --- Prepare: dedup + keyword filter ---
-    filtered = _dedup_and_filter(raw_jobs, dedup_fields, keywords)
+    filtered, forced = _select_jobs(
+        raw_jobs, dedup_fields, keywords, force_score_keywords
+    )
 
     if skip_score:
         _write_jsonl(filtered, output_dir / "jobs.jsonl")
@@ -543,6 +549,21 @@ async def _run(
                 score_cache,
                 max_concurrent=max_concurrent_api,
             )
+
+        # Force-score upfront so they become training examples
+        # before AL selection.
+        if forced:
+            unscored_forced = _unscored_jobs(
+                forced, training.scored_hashes
+            )
+            if unscored_forced:
+                logger.info(
+                    "force-scoring count=%d", len(unscored_forced)
+                )
+                results = await _score(unscored_forced)
+                training.append(
+                    _score_to_examples(unscored_forced, results)
+                )
 
         # Cold start: seed by similarity to user profile
         if cold_start:
@@ -722,6 +743,14 @@ def run(
         str | None,
         typer.Option(help="FTS5 expression for boolean pre-filtering"),
     ] = None,
+    force_score_keywords: Annotated[
+        str | None,
+        typer.Option(
+            help="FTS5 expression for jobs to LLM-score"
+            " unconditionally, bypassing --keywords and the"
+            " active-learning loop"
+        ),
+    ] = None,
     linkedin_dir: Annotated[
         Path, typer.Option(help="LinkedIn data directory")
     ] = Path("linkedin"),
@@ -859,6 +888,7 @@ def run(
             skip_score=skip_score,
             report=report,
             keywords=keywords,
+            force_score_keywords=force_score_keywords,
             linkedin_dir=linkedin_dir,
             dedup_fields=fields,
             resume_path=resume,
@@ -873,181 +903,6 @@ def run(
             num_exploit=num_exploit,
             init_learning_iters=init_learning_iters,
             learning_iters=learning_iters,
-        )
-    )
-
-
-async def _score_manual(
-    cache_dir: Path,
-    output_dir: Path,
-    model: str,
-    prep_model: str,
-    preferences_path: Path,
-    resume_path: Path,
-    max_concurrent_api: int,
-    report: bool,
-    linkedin_dir: Path,
-    input_jobs: Path,
-    hashes: list[str],
-    keywords: str | None,
-    companies_dir: Path,
-    warn_after_seconds: int,
-) -> None:
-    from job_scraper.scorer import score_combined
-    from job_scraper.surrogate import TrainingData
-
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    all_jobs = _load_jobs(input_jobs)
-    hash_set = set(hashes)
-    matched = (
-        [j for j in all_jobs if j.hash in hash_set]
-        if hash_set
-        else all_jobs
-    )
-    if keywords:
-        matched = filter_relevant(keywords, matched)
-    if not matched:
-        logger.warning("no jobs matched the given filters")
-        return
-    logger.info("matched jobs count=%d", len(matched))
-
-    client, interest_rubric, candidate_brief, companies = (
-        await _init_scoring(
-            preferences_path,
-            resume_path,
-            prep_model,
-            cache_dir,
-            max_concurrent_api,
-            companies_dir,
-        )
-    )
-
-    score_cache_path = cache_dir / "score.jsonl"
-    async with open_cache(score_cache_path) as score_cache:
-        results = await score_combined(
-            matched,
-            interest_rubric,
-            candidate_brief,
-            companies,
-            client,
-            model,
-            score_cache,
-            max_concurrent=max_concurrent_api,
-        )
-
-    training = TrainingData(
-        cache_dir / "surrogate_training.jsonl",
-        interest_rubric,
-        candidate_brief,
-    )
-    training.append(_score_to_examples(matched, results))
-
-    new_scored = _collect_scored_jobs(matched, results)
-    jobs_path = output_dir / "jobs.jsonl"
-    merged = _merge_scored_jobs(jobs_path, new_scored)
-    _write_jsonl(merged, jobs_path)
-
-    if report:
-        _generate_report(
-            merged,
-            output_dir,
-            linkedin_dir,
-            companies_dir,
-            warn_after_seconds,
-        )
-
-
-@app.command()
-def score(
-    hash: Annotated[
-        list[str] | None,
-        typer.Option(help="Score jobs matching this hash"),
-    ] = None,
-    input_jobs: Annotated[
-        Path,
-        typer.Option(help="JSONL file to select jobs from"),
-    ] = Path("data/state/jobs_store.jsonl"),
-    cache_dir: Annotated[
-        Path, typer.Option(help="Cache directory")
-    ] = Path("data/cache"),
-    output_dir: Annotated[
-        Path, typer.Option(help="Output directory")
-    ] = Path("data/output"),
-    model: Annotated[
-        str, typer.Option(help="Claude model for scoring")
-    ] = "claude-haiku-4-5",
-    prep_model: Annotated[
-        str,
-        typer.Option(help="Claude model for prep generation"),
-    ] = "claude-sonnet-4-6",
-    preferences: Annotated[
-        Path,
-        typer.Option(help="Path to candidate preferences"),
-    ] = Path("preferences.md"),
-    resume: Annotated[
-        Path,
-        typer.Option(
-            help="Path to resume for recruiter scoring"
-        ),
-    ] = Path("resume.md"),
-    companies_dir: Annotated[
-        Path,
-        typer.Option(
-            help="Directory of company context .md files"
-        ),
-    ] = Path("companies"),
-    max_concurrent_api: Annotated[
-        int,
-        typer.Option(
-            help="Max concurrent Claude API requests"
-        ),
-    ] = 10,
-    report: Annotated[
-        bool,
-        typer.Option("--report", help="Regenerate HTML report"),
-    ] = False,
-    linkedin_dir: Annotated[
-        Path, typer.Option(help="LinkedIn data directory")
-    ] = Path("linkedin"),
-    keywords: Annotated[
-        str | None,
-        typer.Option(
-            help="FTS5 expression to further filter matched"
-            " jobs (e.g. 'title:engineer')"
-        ),
-    ] = None,
-    warn_after_seconds: Annotated[
-        int,
-        typer.Option(
-            help="Flag jobs as stale in the report if not"
-            " observed within this many seconds"
-        ),
-    ] = store.DEFAULT_WARN_AFTER_SECONDS,
-) -> None:
-    """Score specific jobs by hash or keywords filter."""
-    hashes = hash or []
-    if not hashes and not keywords:
-        raise typer.BadParameter(
-            "Provide at least one --hash or --keywords"
-        )
-    logging.basicConfig(level=logging.INFO)
-    asyncio.run(
-        _score_manual(
-            cache_dir=cache_dir,
-            output_dir=output_dir,
-            model=model,
-            prep_model=prep_model,
-            preferences_path=preferences,
-            resume_path=resume,
-            max_concurrent_api=max_concurrent_api,
-            report=report,
-            linkedin_dir=linkedin_dir,
-            input_jobs=input_jobs,
-            hashes=hashes,
-            keywords=keywords,
-            companies_dir=companies_dir,
-            warn_after_seconds=warn_after_seconds,
         )
     )
 

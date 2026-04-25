@@ -71,6 +71,9 @@ let
           let
             files = userFiles name ucfg;
             userDir = "${stateDir}/users/${ucfg.id}";
+            forceScoreFilter = lib.concatMapStringsSep " OR " (f: "(${f})") (
+              builtins.filter (f: f != "") ucfg.forceScoreFilters
+            );
             cmd = concatStringsSep " " (
               [
                 "${pkg}/bin/job-scraper"
@@ -94,6 +97,10 @@ let
                 "--num-exploit ${toString s.numExploit}"
                 "--init-learning-iters ${toString s.initLearningIters}"
                 "--learning-iters ${toString s.learningIters}"
+              ]
+              ++ lib.optionals (forceScoreFilter != "") [
+                "--force-score-keywords"
+                "'${forceScoreFilter}'"
               ]
               ++ lib.optional (cfg.companiesDir != null) "--companies-dir ${cfg.companiesDir}"
               ++ lib.optional (
@@ -274,6 +281,23 @@ in
               keywords = mkOption {
                 type = types.str;
                 description = "FTS5 query expression for boolean pre-filtering.";
+              };
+              forceScoreFilters = mkOption {
+                type = types.listOf types.str;
+                default = [ ];
+                description = ''
+                  FTS5 query expressions for jobs that should always be
+                  LLM-scored, regardless of which jobs the active-learning
+                  loop selects. Entries are OR'd together and passed as
+                  a single `--force-score-keywords` argument to `run`,
+                  bypassing the per-user `keywords` pre-filter. Useful
+                  for forcing scoring of jobs at specific companies
+                  you're particularly interested in.
+                '';
+                example = [
+                  "company:stripe"
+                  "company:anthropic AND title:engineer"
+                ];
               };
               linkedinConnectionsDir = mkOption {
                 type = types.nullOr types.path;

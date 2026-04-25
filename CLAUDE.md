@@ -14,15 +14,14 @@ python -m job_scraper.main run
 # Use a specific config file
 python -m job_scraper.main run --config path/to/scrape.toml
 
-# Score specific jobs manually (merges into existing output)
-python -m job_scraper.main score --keywords "company:stripe" --report
-python -m job_scraper.main score --keywords "company:stripe title:engineer"
-python -m job_scraper.main score --hash abc123
+# Force LLM scoring of jobs matching a filter (bypasses --keywords
+# and the active-learning loop; matched jobs always get scored)
+python -m job_scraper.main run --force-score-keywords "company:stripe"
 ```
 
 ## Architecture
 
-**Pipeline:** scrape → upsert/evict store → dedupe → keywords boolean filter → prep (interest rubric + candidate brief) → active learning (similarity seed + explore/exploit loop) → surrogate ranking → sort → output
+**Pipeline:** scrape → upsert/evict store → dedupe → keywords boolean filter (∪ force-score keywords matches) → prep (interest rubric + candidate brief) → force-score → active learning (similarity seed + explore/exploit loop) → surrogate ranking → sort → output
 
 Key files:
 - `job_scraper/main.py` — CLI (Typer) and pipeline orchestration

@@ -9,9 +9,9 @@ import pytest
 from job_scraper.main import (
     _collect_scored_jobs,
     _compute_agreement,
-    _dedup_and_filter,
     _priority,
     _score_to_examples,
+    _select_jobs,
     _unscored_jobs,
     _write_jsonl,
     _write_surrogate_output,
@@ -105,20 +105,20 @@ def dirs(tmp_path: Path) -> tuple[Path, Path]:
     return cache, output
 
 
-# ── _dedup_and_filter ─────────────────────────────────────
+# ── _select_jobs ──────────────────────────────────────────
 
 
 def test_dedup_only():
     jobs = [_job(hash="a"), _job(hash="a"), _job(hash="b")]
-    result = _dedup_and_filter(jobs, ("hash",), None)
-    assert len(result) == 2
-    assert [j.hash for j in result] == ["a", "b"]
+    universe, forced = _select_jobs(jobs, ("hash",), None, None)
+    assert [j.hash for j in universe] == ["a", "b"]
+    assert forced == []
 
 
 def test_no_dedup_fields_passes_through():
     jobs = [_job(hash="a"), _job(hash="a")]
-    result = _dedup_and_filter(jobs, (), None)
-    assert len(result) == 2
+    universe, _ = _select_jobs(jobs, (), None, None)
+    assert len(universe) == 2
 
 
 def test_keyword_filter():
@@ -126,9 +126,9 @@ def test_keyword_filter():
         _job(hash="a", title="Python Engineer"),
         _job(hash="b", title="Java Developer"),
     ]
-    result = _dedup_and_filter(jobs, (), "python")
-    assert len(result) == 1
-    assert result[0].hash == "a"
+    universe, forced = _select_jobs(jobs, (), "python", None)
+    assert [j.hash for j in universe] == ["a"]
+    assert forced == []
 
 
 def test_dedup_then_filter():
@@ -137,12 +137,14 @@ def test_dedup_then_filter():
         _job(hash="a", title="Python Engineer"),
         _job(hash="b", title="Java Developer"),
     ]
-    result = _dedup_and_filter(jobs, ("hash",), "python")
-    assert len(result) == 1
+    universe, _ = _select_jobs(jobs, ("hash",), "python", None)
+    assert len(universe) == 1
 
 
-def test_dedup_and_filter_empty():
-    assert _dedup_and_filter([], ("hash",), "python") == []
+def test_select_jobs_empty():
+    universe, forced = _select_jobs([], ("hash",), "python", None)
+    assert universe == []
+    assert forced == []
 
 
 def test_multi_field_dedup():
@@ -151,10 +153,48 @@ def test_multi_field_dedup():
         _job(hash="b", title="Eng", company="X"),
         _job(hash="c", title="Eng", company="Y"),
     ]
-    result = _dedup_and_filter(
-        jobs, ("title", "company"), None
+    universe, _ = _select_jobs(
+        jobs, ("title", "company"), None, None
     )
-    assert len(result) == 2
+    assert len(universe) == 2
+
+
+def test_force_score_bypasses_keyword_filter():
+    jobs = [
+        _job(hash="a", title="Python Engineer", company="Acme"),
+        _job(hash="b", title="Java Developer", company="Stripe"),
+        _job(hash="c", title="Python Scientist", company="Stripe"),
+    ]
+    universe, forced = _select_jobs(
+        jobs, (), "python", "company:stripe"
+    )
+    assert {j.hash for j in universe} == {"a", "b", "c"}
+    assert {j.hash for j in forced} == {"b", "c"}
+
+
+def test_force_score_overlap_with_keyword():
+    jobs = [
+        _job(hash="a", title="Python Engineer", company="Stripe"),
+    ]
+    universe, forced = _select_jobs(
+        jobs, (), "python", "company:stripe"
+    )
+    assert [j.hash for j in universe] == ["a"]
+    assert [j.hash for j in forced] == ["a"]
+
+
+def test_force_score_only():
+    jobs = [
+        _job(hash="a", title="Eng", company="Acme"),
+        _job(hash="b", title="Eng", company="Stripe"),
+    ]
+    universe, forced = _select_jobs(
+        jobs, (), None, "company:stripe"
+    )
+    # No --keywords pre-filter: universe is full deduped set;
+    # forced is the Stripe subset.
+    assert {j.hash for j in universe} == {"a", "b"}
+    assert {j.hash for j in forced} == {"b"}
 
 
 # ── _unscored_jobs ────────────────────────────────────────

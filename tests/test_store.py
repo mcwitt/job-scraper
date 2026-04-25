@@ -190,7 +190,7 @@ def test_dedup_after_upsert_prefers_fresh():
     """When fresh and carried collide on dedup key (different
     hashes, same title/company), fresh wins because _dedup keeps
     the first occurrence and upsert_and_evict puts fresh first."""
-    from job_scraper.main import _dedup_and_filter
+    from job_scraper.main import _select_jobs
 
     yesterday = (NOW - timedelta(days=1)).isoformat()
     prev = {
@@ -213,9 +213,10 @@ def test_dedup_after_upsert_prefers_fresh():
     new_store = store.upsert_and_evict(
         prev, fresh, NOW, retain_for_seconds=7 * 86400
     )
-    deduped = _dedup_and_filter(
+    deduped, _ = _select_jobs(
         list(new_store.values()),
         ("title", "company"),
+        None,
         None,
     )
     assert len(deduped) == 1
