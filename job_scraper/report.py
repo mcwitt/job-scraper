@@ -55,8 +55,13 @@ TEMPLATE = """\
   .tip.active .tip-body { display: block; }
   .tip.flip .tip-body { top: auto; bottom: 100%; }
   .tip-score .tip-body { min-width: 320px; }
+  .tip-company { max-width: 300px; }
   .tip-company .tip-body { max-width: 520px;
     max-height: 400px; overflow-y: auto; }
+  .cell-text { display: inline-block;
+    max-width: 100%; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap;
+    vertical-align: bottom; }
   .tip-company .tip-body h1,
   .tip-company .tip-body h2 {
     font-size: 0.95em; margin: 0.6rem 0 0.2rem; }
@@ -172,13 +177,13 @@ TEMPLATE = """\
           title="{{ job.posted }}">
           {{- time_ago(job.posted) -}}
         </span>{% endif %}</td>
-      <td class="status"
+      <td class="status{% if is_stale(job.last_seen_at) %} tip{% endif %}"
         data-sort="{{ 1 if is_stale(job.last_seen_at) else 0 }}">
-        {% if is_stale(job.last_seen_at) %}
-        <span title="Not observed in the last
-{{ time_ago(job.last_seen_at) }}.
-Showing cached record.">⚠️</span>
-        {% endif %}</td>
+        {% if is_stale(job.last_seen_at) %}⚠️
+        <div class="tip-body">
+          Last observed {{ time_ago(job.last_seen_at) }}.
+          Showing cached record.
+        </div>{% endif %}</td>
       <td class="cell">
         <a href="{{ job.url }}">
           {{- job.title -}}
@@ -186,8 +191,9 @@ Showing cached record.">⚠️</span>
       {% set ctx = company_ctx.get(
         job.company) %}
       {% if ctx %}
-      <td class="cell tip tip-company">
-        {{ job.company }}
+      <td class="tip tip-company">
+        <span class="cell-text"
+          >{{ job.company }}</span>
         <div class="tip-body">{{ ctx }}</div>
       </td>
       {% else %}
