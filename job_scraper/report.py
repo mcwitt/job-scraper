@@ -55,8 +55,10 @@ TEMPLATE = """\
   .tip.active .tip-body { display: block; }
   .tip.flip .tip-body { top: auto; bottom: 100%; }
   .tip-score .tip-body { min-width: 320px; }
+  .tip-status .tip-body { min-width: 240px; }
   .tip-company { max-width: 300px; }
-  .tip-company .tip-body { max-width: 520px;
+  .tip-company .tip-body { min-width: 400px;
+    max-width: 520px;
     max-height: 400px; overflow-y: auto; }
   .cell-text { display: inline-block;
     max-width: 100%; overflow: hidden;
@@ -177,9 +179,10 @@ TEMPLATE = """\
           title="{{ job.posted }}">
           {{- time_ago(job.posted) -}}
         </span>{% endif %}</td>
-      <td class="status{% if is_stale(job.last_seen_at) %} tip{% endif %}"
-        data-sort="{{ 1 if is_stale(job.last_seen_at) else 0 }}">
-        {% if is_stale(job.last_seen_at) %}⚠️
+      {% set stale = is_stale(job.last_seen_at) %}
+      <td class="status{% if stale %} tip tip-status{% endif %}"
+        data-sort="{{ 1 if stale else 0 }}">
+        {% if stale %}⚠️
         <div class="tip-body">
           Last observed {{ time_ago(job.last_seen_at) }}.
           Showing cached record.
@@ -199,9 +202,10 @@ TEMPLATE = """\
       {% else %}
       <td class="cell">{{ job.company }}</td>
       {% endif %}
+      {% set n1 = first | length %}
       <td class="conns tip"
-        data-sort="{{ first | length }}">
-        {{- first | length or "" -}}
+        data-sort="{{ n1 }}">
+        {{- n1 or "" -}}
         {%- if first %}
         <div class="tip-body">
         <ul>
