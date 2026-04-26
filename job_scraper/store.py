@@ -51,16 +51,26 @@ def upsert_and_evict(
     retain_for_seconds: int,
 ) -> dict[str, Job]:
     """Upsert fresh jobs (last_seen_at = now), evict carried jobs
-    past the retention window."""
+    past the retention window.
+
+    A carried job is also evicted if a freshly-observed job has the
+    same url — it represents the same posting under a new hash
+    (e.g. the description was edited), so the new entry supersedes
+    the old.
+    """
     now_str = now.isoformat()
     new_store: dict[str, Job] = {}
     fresh_hashes: set[str] = set()
+    fresh_urls: set[str] = set()
     for job in fresh:
         stamped = dataclasses.replace(job, last_seen_at=now_str)
         new_store[stamped.hash] = stamped
         fresh_hashes.add(stamped.hash)
+        fresh_urls.add(stamped.url)
     for h, job in store.items():
         if h in fresh_hashes:
+            continue
+        if job.url in fresh_urls:
             continue
         age = (now - parse_iso(job.last_seen_at)).total_seconds()
         if age <= retain_for_seconds:

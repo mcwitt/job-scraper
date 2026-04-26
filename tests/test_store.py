@@ -14,7 +14,7 @@ def _job(hash: str, **kw) -> Job:
         hash=hash,
         title=kw.pop("title", f"Eng {hash}"),
         company=kw.pop("company", "Acme"),
-        url=kw.pop("url", "https://example.com"),
+        url=kw.pop("url", f"https://example.com/{hash}"),
         description=kw.pop("description", "d"),
         source=kw.pop("source", "test"),
         **kw,
@@ -112,6 +112,33 @@ def test_fresh_first_in_returned_dict():
         "carried1",
         "carried2",
     ]
+
+
+def test_fresh_supersedes_carried_with_same_url():
+    """When a fresh entry shares its url with a carried entry under
+    a different hash (e.g. description edited), the carried entry
+    is evicted — the fresh entry represents the same posting."""
+    yesterday = (NOW - timedelta(days=1)).isoformat()
+    prev = {
+        "old_hash": _job(
+            "old_hash",
+            url="https://example.com/job/123",
+            description="old desc",
+            last_seen_at=yesterday,
+        )
+    }
+    fresh = [
+        _job(
+            "new_hash",
+            url="https://example.com/job/123",
+            description="new desc",
+        )
+    ]
+    new_store = store.upsert_and_evict(
+        prev, fresh, NOW, retain_for_seconds=7 * 86400
+    )
+    assert set(new_store.keys()) == {"new_hash"}
+    assert new_store["new_hash"].description == "new desc"
 
 
 def test_partial_failure_carries_missing_jobs():
