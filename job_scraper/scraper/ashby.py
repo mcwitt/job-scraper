@@ -6,10 +6,6 @@ from job_scraper.models import Job
 from job_scraper.scraper.http import Http
 
 
-def _format_compensation(comp: dict) -> str | None:
-    return comp.get("compensationTierSummary") or None
-
-
 def scrape_board(board: str, *, name: str):
     """Return a scrape function for an Ashby job board."""
 
@@ -30,9 +26,6 @@ def scrape_board(board: str, *, name: str):
 
             location = posting.get("location")
 
-            comp_data = posting.get("compensation")
-            comp = _format_compensation(comp_data) if comp_data else None
-
             h = job_hash(title, name, description)
             yield Job(
                 hash=h,
@@ -41,7 +34,7 @@ def scrape_board(board: str, *, name: str):
                 team=team,
                 url=post_url,
                 posted=posted,
-                comp=comp,
+                compensation=None,
                 location=location,
                 description=description,
                 source=f"ashby:{board}",

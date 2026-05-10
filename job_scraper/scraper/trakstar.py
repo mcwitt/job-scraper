@@ -77,7 +77,7 @@ def scrape_board(slug: str, *, name: str):
                 team=team,
                 url=post_url,
                 posted=posted,
-                comp=None,
+                compensation=None,
                 location=location,
                 description=description,
                 source=f"trakstar:{slug}",

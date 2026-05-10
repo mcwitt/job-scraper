@@ -62,7 +62,7 @@ def scrape_board(domain: str, *, name: str):
                     team=team,
                     url=post_url,
                     posted=posted,
-                    comp=None,
+                    compensation=None,
                     location=location,
                     description=description,
                     source=f"icims:{domain}",

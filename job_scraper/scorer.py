@@ -14,6 +14,7 @@ from anthropic.types import (
 )
 
 from job_scraper.cache import Cache
+from job_scraper.comp import format_compensation
 from job_scraper.companies import canonicalize
 from job_scraper.llm import create
 from job_scraper.models import Job, Score
@@ -24,10 +25,15 @@ SystemBlocks = list[TextBlockParam]
 
 
 def _format_listing(job: Job) -> str:
+    comp = (
+        format_compensation(job.compensation)
+        if job.compensation
+        else "Not specified"
+    )
     return (
         f"**{job.title}** at **{job.company}**\n"
         f"Location: {job.location or 'Not specified'}\n"
-        f"Compensation: {job.comp or 'Not specified'}\n"
+        f"Compensation: {comp}\n"
         f"Team: {job.team or 'Not specified'}\n\n"
         f"{job.description[:8000]}"
     )

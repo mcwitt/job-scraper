@@ -7,25 +7,6 @@ from job_scraper.scraper.html import html_to_text
 from job_scraper.scraper.http import Http
 
 
-def _format_pay(ranges: list[dict]) -> str | None:
-    if not ranges:
-        return None
-    parts = []
-    for r in ranges:
-        lo = r.get("min_cents")
-        hi = r.get("max_cents")
-        currency = r.get("currency_type", "USD")
-        if lo is None and hi is None:
-            continue
-        tokens = []
-        if lo is not None:
-            tokens.append(f"{currency} {lo / 100:,.0f}")
-        if hi is not None:
-            tokens.append(f"{currency} {hi / 100:,.0f}")
-        parts.append(" - ".join(tokens))
-    return " | ".join(parts) if parts else None
-
-
 def scrape_board(token: str, *, name: str):
     """Return a scrape function for a Greenhouse board."""
 
@@ -49,9 +30,6 @@ def scrape_board(token: str, *, name: str):
             updated = posting.get("updated_at")
             posted = updated[:10] if updated else None
 
-            pay_ranges = posting.get("pay_input_ranges", [])
-            comp = _format_pay(pay_ranges)
-
             h = job_hash(title, name, description)
             yield Job(
                 hash=h,
@@ -60,7 +38,7 @@ def scrape_board(token: str, *, name: str):
                 team=team,
                 url=post_url,
                 posted=posted,
-                comp=comp,
+                compensation=None,
                 location=location,
                 description=description,
                 source=f"greenhouse:{token}",

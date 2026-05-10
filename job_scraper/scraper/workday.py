@@ -250,7 +250,7 @@ def scrape_board(company: str, instance: str, site: str, *, name: str):
                 team=None,
                 url=post_url,
                 posted=posted,
-                comp=None,
+                compensation=None,
                 location=detail_loc or listing_loc,
                 description=description,
                 source=f"workday:{company}",

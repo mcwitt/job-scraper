@@ -11,6 +11,7 @@ from job_scraper._report_base import (
     _epoch,
     _time_ago,
 )
+from job_scraper.comp import format_compensation
 from job_scraper.companies import canonicalize, load_companies
 from job_scraper.linkedin import (
     Connection,
@@ -244,7 +245,7 @@ TEMPLATE = """\
       <td class="cell">{{ job.team or "" }}</td>
       <td class="cell">
         {{ job.location or "" }}</td>
-      <td class="cell">{{ job.comp or "" }}</td>
+      <td class="cell">{{ format_comp(job.compensation) }}</td>
       <td class="date"
         data-sort="{{ epoch(job.last_seen_at) }}"
         title="{{ job.last_seen_at }}">
@@ -386,6 +387,7 @@ def render_report(
         date_class=_date_class,
         time_ago=_time_ago,
         epoch=_epoch,
+        format_comp=lambda c: format_compensation(c) if c else "",
         lookup=lookup or _no_connections,
         company_ctx=_build_company_ctx(jobs, companies_dir),
         is_stale=lambda ts: is_stale(ts, now_dt, warn_after_seconds),

@@ -15,6 +15,7 @@ from sklearn.linear_model import Ridge, RidgeCV
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.model_selection import cross_val_predict
 
+from job_scraper.comp import format_compensation
 from job_scraper.models import Job
 
 Predict = Callable[..., np.ndarray]
@@ -74,7 +75,7 @@ def job_to_example(job: Job, interest_score: int, fit_score: int) -> Example:
         company=job.company,
         location=job.location,
         team=job.team,
-        comp=job.comp,
+        comp=format_compensation(job.compensation) if job.compensation else None,
         interest_score=interest_score,
         fit_score=fit_score,
     )
@@ -152,8 +153,17 @@ def _meta(obj: Job | Example) -> str:
         parts.append(obj.location)
     if obj.team:
         parts.append(obj.team)
-    if obj.comp:
-        parts.append(obj.comp)
+    comp: str | None
+    if isinstance(obj, Job):
+        comp = (
+            format_compensation(obj.compensation)
+            if obj.compensation
+            else None
+        )
+    else:
+        comp = obj.comp
+    if comp:
+        parts.append(comp)
     return " ".join(parts)
 
 

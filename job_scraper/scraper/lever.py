@@ -7,21 +7,6 @@ from job_scraper.models import Job
 from job_scraper.scraper.http import Http
 
 
-def _format_salary(salary: dict) -> str | None:
-    lo = salary.get("min")
-    hi = salary.get("max")
-    currency = salary.get("currency", "")
-    interval = salary.get("interval", "")
-    if lo is None and hi is None:
-        return None
-    parts = []
-    if lo is not None:
-        parts.append(f"{currency} {lo:,.0f}")
-    if hi is not None:
-        parts.append(f"{currency} {hi:,.0f}")
-    return " - ".join(parts) + (f" / {interval}" if interval else "")
-
-
 def scrape_board(company: str, *, name: str, eu: bool = False):
     """Return a scrape function for a Lever job board."""
 
@@ -48,9 +33,6 @@ def scrape_board(company: str, *, name: str, eu: bool = False):
 
             location = categories.get("location")
 
-            salary = posting.get("salaryRange")
-            comp = _format_salary(salary) if salary else None
-
             h = job_hash(title, name, description)
             yield Job(
                 hash=h,
@@ -59,7 +41,7 @@ def scrape_board(company: str, *, name: str, eu: bool = False):
                 team=team,
                 url=post_url,
                 posted=posted,
-                comp=comp,
+                compensation=None,
                 location=location,
                 description=description,
                 source=f"lever:{company}",

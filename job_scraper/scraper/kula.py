@@ -96,7 +96,7 @@ def scrape_board(token: str, *, name: str):
                 team=team,
                 url=post_url,
                 posted=None,
-                comp=None,
+                compensation=None,
                 location=location,
                 description=description,
                 source=f"kula:{token}",

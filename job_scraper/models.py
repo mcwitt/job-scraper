@@ -2,6 +2,16 @@ from dataclasses import asdict, dataclass
 
 
 @dataclass(frozen=True)
+class Compensation:
+    min_amount: int | None
+    max_amount: int | None
+    currency: str | None
+    interval: str | None
+    equity: bool = False
+    bonus: bool = False
+
+
+@dataclass(frozen=True)
 class Job:
     hash: str
     title: str
@@ -12,18 +22,8 @@ class Job:
     last_seen_at: str = ""
     team: str | None = None
     posted: str | None = None
-    comp: str | None = None
+    compensation: Compensation | None = None
     location: str | None = None
-
-
-@dataclass(frozen=True)
-class Compensation:
-    min_amount: int | None
-    max_amount: int | None
-    currency: str | None
-    interval: str | None
-    equity: bool = False
-    bonus: bool = False
 
 
 @dataclass(frozen=True)
@@ -71,7 +71,7 @@ class ScoredJob:
     last_seen_at: str = ""
     team: str | None = None
     posted: str | None = None
-    comp: str | None = None
+    compensation: Compensation | None = None
     location: str | None = None
 
 

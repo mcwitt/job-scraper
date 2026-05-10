@@ -69,7 +69,7 @@ def scrape_board(board: str, *, name: str):
                 team=team,
                 url=post_url,
                 posted=posted,
-                comp=None,
+                compensation=None,
                 location=loc_str,
                 description=description,
                 source=f"workable:{board}",
