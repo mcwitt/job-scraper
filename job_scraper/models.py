@@ -17,6 +17,16 @@ class Job:
 
 
 @dataclass(frozen=True)
+class Compensation:
+    min_amount: int | None
+    max_amount: int | None
+    currency: str | None
+    interval: str | None
+    equity: bool = False
+    bonus: bool = False
+
+
+@dataclass(frozen=True)
 class Interest:
     strengths_alignment: str
     growth_opportunities: str
