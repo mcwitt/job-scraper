@@ -121,3 +121,34 @@ def test_lever_salary(salary, expected):
 def test_lever_no_bounds_returns_none():
     assert _lv_build({"currency": "USD",
                       "interval": "per-year-salary"}) is None
+
+
+from job_scraper.scraper.ashby import _build_compensation as _ab_build
+
+
+@pytest.mark.parametrize("summary, expected", [
+    ("$164,638 \u2013 $259,000",
+     Compensation(164638, 259000, "USD", None)),
+    ("$250K \u2013 $350K",
+     Compensation(250000, 350000, "USD", None)),
+    ("$160K \u2013 $190K",
+     Compensation(160000, 190000, "USD", None)),
+    ("$43 \u2013 $50",
+     Compensation(43, 50, "USD", None)),
+    # Equity / bonus markers
+    ("$180K \u2013 $200K • Offers Equity",
+     Compensation(180000, 200000, "USD", None, equity=True)),
+    ("$110K \u2013 $160K • Offers Equity • Offers Bonus",
+     Compensation(110000, 160000, "USD", None, equity=True, bonus=True)),
+    # Hyphen separator (not en-dash)
+    ("$100,000 - $120,000",
+     Compensation(100000, 120000, "USD", None)),
+])
+def test_ashby_summary(summary, expected):
+    assert _ab_build({"compensationTierSummary": summary}) == expected
+
+
+def test_ashby_unparseable_returns_none():
+    assert _ab_build({"compensationTierSummary": "Competitive"}) is None
+    assert _ab_build({"compensationTierSummary": ""}) is None
+    assert _ab_build({}) is None
