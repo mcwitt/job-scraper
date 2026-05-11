@@ -91,3 +91,33 @@ def test_greenhouse_first_range_wins():
     c = _gh_build(ranges)
     assert c == Compensation(min_amount=100000, max_amount=120000,
                              currency="USD", interval=None)
+
+
+from job_scraper.scraper.lever import _build_compensation as _lv_build
+
+
+@pytest.mark.parametrize("salary, expected", [
+    ({"min": 100000, "max": 115000, "currency": "USD",
+      "interval": "per-year-salary"},
+     Compensation(100000, 115000, "USD", "annual")),
+    ({"min": 50, "max": 75, "currency": "USD",
+      "interval": "per-hour-wage"},
+     Compensation(50, 75, "USD", "hourly")),
+    ({"min": 8000, "max": 10000, "currency": "EUR",
+      "interval": "per-month-salary"},
+     Compensation(8000, 10000, "EUR", "monthly")),
+    # Unknown interval → None
+    ({"min": 100000, "max": 115000, "currency": "USD",
+      "interval": "per-fortnight-mystery"},
+     Compensation(100000, 115000, "USD", None)),
+    # Missing currency → None
+    ({"min": 100000, "max": 115000, "interval": "per-year-salary"},
+     Compensation(100000, 115000, None, "annual")),
+])
+def test_lever_salary(salary, expected):
+    assert _lv_build(salary) == expected
+
+
+def test_lever_no_bounds_returns_none():
+    assert _lv_build({"currency": "USD",
+                      "interval": "per-year-salary"}) is None

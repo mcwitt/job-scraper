@@ -3,8 +3,28 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 
 from job_scraper.hash import job_hash
-from job_scraper.models import Job
+from job_scraper.models import Compensation, Job
 from job_scraper.scraper.http import Http
+
+_INTERVAL_MAP = {
+    "per-year-salary": "annual",
+    "per-hour-wage": "hourly",
+    "per-month-salary": "monthly",
+    "per-week-salary": "weekly",
+}
+
+
+def _build_compensation(salary: dict) -> Compensation | None:
+    lo = salary.get("min")
+    hi = salary.get("max")
+    if lo is None and hi is None:
+        return None
+    return Compensation(
+        min_amount=lo,
+        max_amount=hi,
+        currency=salary.get("currency") or None,
+        interval=_INTERVAL_MAP.get(salary.get("interval", ""), None),
+    )
 
 
 def scrape_board(company: str, *, name: str, eu: bool = False):
@@ -33,6 +53,9 @@ def scrape_board(company: str, *, name: str, eu: bool = False):
 
             location = categories.get("location")
 
+            salary = posting.get("salaryRange")
+            compensation = _build_compensation(salary) if salary else None
+
             h = job_hash(title, name, description)
             yield Job(
                 hash=h,
@@ -41,7 +64,7 @@ def scrape_board(company: str, *, name: str, eu: bool = False):
                 team=team,
                 url=post_url,
                 posted=posted,
-                compensation=None,
+                compensation=compensation,
                 location=location,
                 description=description,
                 source=f"lever:{company}",
