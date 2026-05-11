@@ -153,7 +153,8 @@ See `scrape.example.toml` for the full config format.
 | `job_scraper/scorer.py` | Claude scoring with prompt caching and structured output |
 | `job_scraper/llm.py` | Cached Claude API wrapper (`create()` with cache-through) |
 | `job_scraper/cache.py` | JSONL append-log cache with TTL |
-| `job_scraper/models.py` | `Job` / `ScoredJob` frozen dataclasses |
+| `job_scraper/models.py` | `Job` / `ScoredJob` / `Compensation` frozen dataclasses |
+| `job_scraper/comp.py` | `format_compensation` renderer for canonical comp display |
 | `job_scraper/report.py` | Interactive HTML report (Jinja2) |
 | `job_scraper/scraper/` | Scraper loader and ATS platform factories |
 

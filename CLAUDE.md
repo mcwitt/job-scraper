@@ -34,7 +34,8 @@ Key files:
 - `job_scraper/companies/` — `canonicalize`/`load_companies` (loads `.md` files from configurable directory)
 - `job_scraper/cache.py` — JSONL append-log cache with TTL
 - `job_scraper/store.py` — persistent per-job store with retention (`data/state/jobs_store.jsonl`); carries forward unobserved jobs for `--retain-for-seconds`
-- `job_scraper/models.py` — Job/ScoredJob/Interest/Fit frozen dataclasses
+- `job_scraper/models.py` — Job/ScoredJob/Compensation/Interest/Fit frozen dataclasses
+- `job_scraper/comp.py` — `format_compensation` renderer (canonical display string for `Compensation`)
 - `job_scraper/report.py` — HTML report (Jinja2)
 - `job_scraper/scraper/__init__.py` — `ScrapeFn` type, `load_scrapers()` config-driven loader
 - `job_scraper/scraper/http.py` — cached HTTP GET/POST with rate-limiting
