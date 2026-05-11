@@ -2,9 +2,24 @@ import json
 from collections.abc import AsyncIterator
 
 from job_scraper.hash import job_hash
-from job_scraper.models import Job
+from job_scraper.models import Compensation, Job
 from job_scraper.scraper.html import html_to_text
 from job_scraper.scraper.http import Http
+
+
+def _build_compensation(ranges: list[dict]) -> Compensation | None:
+    for r in ranges:
+        lo = r.get("min_cents")
+        hi = r.get("max_cents")
+        if lo is None and hi is None:
+            continue
+        return Compensation(
+            min_amount=lo // 100 if lo is not None else None,
+            max_amount=hi // 100 if hi is not None else None,
+            currency=r.get("currency_type", "USD"),
+            interval=None,
+        )
+    return None
 
 
 def scrape_board(token: str, *, name: str):
@@ -30,6 +45,9 @@ def scrape_board(token: str, *, name: str):
             updated = posting.get("updated_at")
             posted = updated[:10] if updated else None
 
+            pay_ranges = posting.get("pay_input_ranges", [])
+            compensation = _build_compensation(pay_ranges)
+
             h = job_hash(title, name, description)
             yield Job(
                 hash=h,
@@ -38,7 +56,7 @@ def scrape_board(token: str, *, name: str):
                 team=team,
                 url=post_url,
                 posted=posted,
-                compensation=None,
+                compensation=compensation,
                 location=location,
                 description=description,
                 source=f"greenhouse:{token}",

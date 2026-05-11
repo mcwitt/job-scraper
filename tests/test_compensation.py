@@ -55,3 +55,39 @@ from job_scraper.comp import format_compensation
 ])
 def test_format_compensation(c, expected):
     assert format_compensation(c) == expected
+
+
+from job_scraper.scraper.greenhouse import _build_compensation as _gh_build
+
+
+def test_greenhouse_pay_range():
+    ranges = [{"min_cents": 16500000, "max_cents": 22500000,
+               "currency_type": "USD"}]
+    c = _gh_build(ranges)
+    assert c == Compensation(min_amount=165000, max_amount=225000,
+                             currency="USD", interval=None)
+
+
+def test_greenhouse_eur():
+    ranges = [{"min_cents": 9200000, "max_cents": 11500000,
+               "currency_type": "EUR"}]
+    c = _gh_build(ranges)
+    assert c == Compensation(min_amount=92000, max_amount=115000,
+                             currency="EUR", interval=None)
+
+
+def test_greenhouse_empty_returns_none():
+    assert _gh_build([]) is None
+    assert _gh_build([{"min_cents": None, "max_cents": None}]) is None
+
+
+def test_greenhouse_first_range_wins():
+    # Multiple ranges (e.g. per-location) — take the first that has data.
+    ranges = [
+        {"min_cents": None, "max_cents": None},
+        {"min_cents": 10000000, "max_cents": 12000000,
+         "currency_type": "USD"},
+    ]
+    c = _gh_build(ranges)
+    assert c == Compensation(min_amount=100000, max_amount=120000,
+                             currency="USD", interval=None)
