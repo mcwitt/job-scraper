@@ -324,6 +324,20 @@ def test_collect_preserves_fields():
     assert scored[0].score_fit.score == 70
 
 
+def test_collect_preserves_compensation_dataclass():
+    from job_scraper.comp import format_compensation
+    from job_scraper.models import Compensation
+
+    comp = Compensation(100000, 150000, "USD", "annual", equity=True)
+    job = _job(hash="x", compensation=comp)
+    results = {"x": _score()}
+    scored = _collect_scored_jobs([job], results)
+    assert isinstance(scored[0].compensation, Compensation)
+    assert format_compensation(scored[0].compensation) == (
+        "$100k\u2013$150k/yr (+equity)"
+    )
+
+
 # ── _compute_agreement ────────────────────────────────────
 
 

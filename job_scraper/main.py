@@ -315,7 +315,7 @@ def _collect_scored_jobs(
 
     scored = [
         ScoredJob(
-            **to_dict(job),
+            **{f.name: getattr(job, f.name) for f in dataclasses.fields(job)},
             score_interest=data.interest,
             score_fit=data.fit,
         )
