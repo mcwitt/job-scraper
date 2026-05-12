@@ -3,10 +3,10 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 
 from job_scraper.hash import job_hash
-from job_scraper.models import Compensation, Job
+from job_scraper.models import Compensation, Interval, Job
 from job_scraper.scraper.http import Http
 
-_INTERVAL_MAP = {
+_INTERVAL_MAP: dict[str, Interval] = {
     "per-year-salary": "annual",
     "per-hour-wage": "hourly",
     "per-month-salary": "monthly",

@@ -1,4 +1,7 @@
 from dataclasses import asdict, dataclass
+from typing import Literal
+
+Interval = Literal["annual", "hourly", "monthly", "weekly"]
 
 
 @dataclass(frozen=True)
@@ -6,7 +9,7 @@ class Compensation:
     min_amount: int | None
     max_amount: int | None
     currency: str | None
-    interval: str | None
+    interval: Interval | None
     equity: bool = False
     bonus: bool = False
 

@@ -16,7 +16,7 @@ def _build_compensation(ranges: list[dict]) -> Compensation | None:
         return Compensation(
             min_amount=lo // 100 if lo is not None else None,
             max_amount=hi // 100 if hi is not None else None,
-            currency=r.get("currency_type", "USD"),
+            currency=r.get("currency_type") or "USD",
             interval=None,
         )
     return None
