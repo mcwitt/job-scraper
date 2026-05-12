@@ -93,6 +93,14 @@ def test_greenhouse_first_range_wins():
                              currency="USD", interval=None)
 
 
+@pytest.mark.parametrize("currency_type", [None, ""])
+def test_greenhouse_currency_falls_back_to_usd(currency_type):
+    ranges = [{"min_cents": 10000000, "max_cents": 12000000,
+               "currency_type": currency_type}]
+    c = _gh_build(ranges)
+    assert c is not None and c.currency == "USD"
+
+
 from job_scraper.scraper.lever import _build_compensation as _lv_build
 
 
