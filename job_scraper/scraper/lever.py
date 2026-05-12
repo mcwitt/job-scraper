@@ -20,8 +20,8 @@ def _build_compensation(salary: dict) -> Compensation | None:
     if lo is None and hi is None:
         return None
     return Compensation(
-        min_amount=lo,
-        max_amount=hi,
+        min_amount=int(lo) if lo is not None else None,
+        max_amount=int(hi) if hi is not None else None,
         currency=salary.get("currency") or None,
         interval=_INTERVAL_MAP.get(salary.get("interval", ""), None),
     )

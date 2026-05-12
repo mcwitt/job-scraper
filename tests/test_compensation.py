@@ -121,6 +121,10 @@ from job_scraper.scraper.lever import _build_compensation as _lv_build
     # Missing currency → None
     ({"min": 100000, "max": 115000, "interval": "per-year-salary"},
      Compensation(100000, 115000, None, "annual")),
+    # Float hourly wage → truncated to int (Lever returns decimals here)
+    ({"min": 37.02, "max": 59.13, "currency": "USD",
+      "interval": "per-hour-wage"},
+     Compensation(37, 59, "USD", "hourly")),
 ])
 def test_lever_salary(salary, expected):
     assert _lv_build(salary) == expected
