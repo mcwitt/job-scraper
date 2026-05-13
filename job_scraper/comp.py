@@ -25,6 +25,18 @@ _INTERVAL_SUFFIX: dict[Interval, str] = {
 }
 
 
+def format_amount(
+    amount: int | None,
+    currency: str | None = None,
+    interval: Interval | None = None,
+) -> str:
+    if amount is None:
+        return ""
+    prefix = _prefix(currency)
+    suffix = _INTERVAL_SUFFIX[interval] if interval else ""
+    return f"{prefix}{_amount(amount, amount >= 1000)}{suffix}"
+
+
 def format_compensation(c: Compensation | str) -> str:
     if isinstance(c, str):
         return c

@@ -11,14 +11,14 @@ from job_scraper._report_base import (
     _epoch,
     _time_ago,
 )
-from job_scraper.comp import format_compensation
+from job_scraper.comp import format_amount, format_compensation
 from job_scraper.companies import canonicalize, load_companies
 from job_scraper.linkedin import (
     Connection,
     LookupFn,
     SecondDegree,
 )
-from job_scraper.models import ScoredJob
+from job_scraper.models import Compensation, ScoredJob
 from job_scraper.store import (
     DEFAULT_WARN_AFTER_SECONDS,
     is_stale,
@@ -138,6 +138,8 @@ TEMPLATE = """\
       <th data-search>Team</th>
       <th data-search>Location</th>
       <th data-search>Compensation</th>
+      <th class="num">Comp min</th>
+      <th class="num">Comp max</th>
       <th>Last seen</th>
     </tr>
   </thead>
@@ -245,7 +247,11 @@ TEMPLATE = """\
       <td class="cell">{{ job.team or "" }}</td>
       <td class="cell">
         {{ job.location or "" }}</td>
-      <td class="cell">{{ format_comp(job.compensation) }}</td>
+      {% set lo_sort, lo, hi_sort, hi = comp_cells(job.compensation) %}
+      <td class="cell" data-sort="{{ lo_sort }}"
+        >{{ format_comp(job.compensation) }}</td>
+      <td class="num" data-sort="{{ lo_sort }}">{{ lo }}</td>
+      <td class="num" data-sort="{{ hi_sort }}">{{ hi }}</td>
       <td class="date"
         data-sort="{{ epoch(job.last_seen_at) }}"
         title="{{ job.last_seen_at }}">
@@ -315,6 +321,8 @@ document.addEventListener('click', function() {
     {name: 'Team', on: false},
     {name: 'Location', on: false},
     {name: 'Compensation', on: false},
+    {name: 'Comp min', on: false},
+    {name: 'Comp max', on: false},
     {name: 'Last seen', on: false}
   ], 'job-scraper-cols');
   initSort(function() { showPage(0); });
@@ -337,6 +345,19 @@ def _date_class(date_str: str | None) -> str:
     if days < 7:
         return "badge badge-green"
     return ""
+
+
+def _comp_cells(
+    c: Compensation | str | None,
+) -> tuple[int | str, str, int | str, str]:
+    if not isinstance(c, Compensation):
+        return "", "", "", ""
+    return (
+        c.min_amount if c.min_amount is not None else "",
+        format_amount(c.min_amount, c.currency, c.interval),
+        c.max_amount if c.max_amount is not None else "",
+        format_amount(c.max_amount, c.currency, c.interval),
+    )
 
 
 def _score_class(score: float) -> str:
@@ -388,6 +409,7 @@ def render_report(
         time_ago=_time_ago,
         epoch=_epoch,
         format_comp=lambda c: format_compensation(c) if c else "",
+        comp_cells=_comp_cells,
         lookup=lookup or _no_connections,
         company_ctx=_build_company_ctx(jobs, companies_dir),
         is_stale=lambda ts: is_stale(ts, now_dt, warn_after_seconds),
