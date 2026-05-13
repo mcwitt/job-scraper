@@ -11,37 +11,27 @@ import re
 
 from job_scraper.models import Compensation, Interval
 
-_AMOUNT = r"\$\s*([\d,]+(?:\.\d+)?)\s*([KkMm]?)"
+# Lookbehind on `\$` matches `ashby.py`'s _USD: keeps "CA$" / "AU$" /
+# similar non-USD prefixes from being parsed as USD.
+_AMOUNT = r"(?<![A-Za-z])\$\s*([\d,]+(?:\.\d+)?)\s*([KkMm]?)"
 _SEP = r"\s*(?:-|\u2013|to)\s*"
 
-# Anchored context phrases. Order doesn't matter — first match wins.
-# Each pattern uses non-capturing context groups so groups 1/2 are
-# always (lo_num, lo_unit) and groups 3/4 are (hi_num, hi_unit).
-_PATTERNS: tuple[re.Pattern[str], ...] = (
-    # "salary range ...", "pay range ...", "base salary range ...",
-    # "U.S. base pay range ...", "annual salary range ..."
-    re.compile(
-        r"(?:annual|base|hourly|u\.?s\.?|usd)?\s*"
-        r"(?:salary|pay|compensation|wage)\s+range"
-        rf"[^$\n]{{0,120}}{_AMOUNT}\$?{_SEP}{_AMOUNT}",
-        re.IGNORECASE,
-    ),
-    # "range for this role is $X - $Y" (Netflix, Phenom, iCIMS variants)
-    re.compile(
-        r"range\s+for\s+this\s+role"
-        rf"[^$\n]{{0,120}}{_AMOUNT}\$?{_SEP}{_AMOUNT}",
-        re.IGNORECASE,
-    ),
-    # "Compensation: $X - $Y" (Workable agency listings)
-    re.compile(
-        rf"compensation\s*:\s*{_AMOUNT}\$?{_SEP}{_AMOUNT}",
-        re.IGNORECASE,
-    ),
+# Single combined pattern: one scan over the description instead of
+# three. Groups 1/2 are (lo_num, lo_unit) and 3/4 are (hi_num, hi_unit).
+_PATTERN = re.compile(
+    r"(?:"
+    r"(?:annual|base|hourly|u\.?s\.?|usd)?\s*"
+    r"(?:salary|pay|compensation|wage)\s+range"
+    r"|range\s+for\s+this\s+role"
+    r"|compensation\s*:"
+    r")"
+    rf"[^$\n]{{0,120}}{_AMOUNT}\$?{_SEP}{_AMOUNT}",
+    re.IGNORECASE,
 )
 
+# Hourly markers checked first — "an hour" trumps a stray "annual"
+# earlier in the same sentence.
 _INTERVAL_KEYWORDS: tuple[tuple[str, Interval], ...] = (
-    # Hourly markers checked first — "an hour" trumps a stray "annual"
-    # earlier in the same sentence.
     ("an hour", "hourly"),
     ("per hour", "hourly"),
     ("/hr", "hourly"),
@@ -88,34 +78,29 @@ def extract_from_text(text: str) -> Compensation | None:
     "salary range", "pay range", "compensation:", or "range for this
     role" — not just any "$X-$Y" pair in the description.
     """
-    if not text:
+    if not text or "$" not in text:
         return None
-    for pat in _PATTERNS:
-        m = pat.search(text)
-        if not m:
-            continue
-        lo = _to_int(m.group(1), m.group(2))
-        hi = _to_int(m.group(3), m.group(4))
-        # Sanity: both bounds positive, hi >= lo, and within plausible
-        # human-pay range (>$1/hr, <$10M/yr).
-        if lo <= 0 or hi <= 0 or hi < lo or hi > 10_000_000:
-            continue
-        window = text[max(0, m.start() - 60) : m.end() + 60]
-        interval = _infer_interval(window, lo)
-        # Reject mismatches: annual bounds shouldn't be in hourly-wage
-        # magnitude. Often signals a typo in the source ("$100,00")
-        # or a "$X.XX per hour" line that we still mis-classified.
-        if interval == "annual" and hi < 10_000:
-            continue
-        # Magnitude override: no real hourly wage is >$1k/hr. Sources
-        # like Rivian print "Salary Range/Hourly Rate range" on annual
-        # numbers, which tricks the keyword-based inference.
-        if interval == "hourly" and lo > 1000:
-            interval = "annual"
-        return Compensation(
-            min_amount=lo,
-            max_amount=hi,
-            currency="USD",
-            interval=interval,
-        )
-    return None
+    m = _PATTERN.search(text)
+    if m is None:
+        return None
+    lo = _to_int(m.group(1), m.group(2))
+    hi = _to_int(m.group(3), m.group(4))
+    if lo <= 0 or hi <= 0 or hi < lo or hi > 10_000_000:
+        return None
+    window = text[max(0, m.start() - 60) : m.end() + 60]
+    interval = _infer_interval(window, lo)
+    # Annual amounts < $10k usually mean a typo in the source ("$100,00")
+    # or a per-hour line we mis-inferred.
+    if interval == "annual" and hi < 10_000:
+        return None
+    # No real hourly wage is >$1k/hr. Some boilerplate prints "Hourly
+    # Rate" alongside annual amounts; override rather than reject since
+    # the amounts are still meaningful.
+    if interval == "hourly" and lo > 1000:
+        interval = "annual"
+    return Compensation(
+        min_amount=lo,
+        max_amount=hi,
+        currency="USD",
+        interval=interval,
+    )
