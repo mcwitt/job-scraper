@@ -25,6 +25,13 @@ _INTERVAL_KEYWORDS: dict[str, Interval] = {
     "annual": "annual",
 }
 
+_COMPONENT_INTERVAL_MAP: dict[str, Interval] = {
+    "1 HOUR": "hourly",
+    "1 WEEK": "weekly",
+    "1 MONTH": "monthly",
+    "1 YEAR": "annual",
+}
+
 
 def _to_int(num: str, k: str | None) -> int:
     n = float(num.replace(",", ""))
@@ -39,7 +46,51 @@ def _detect_interval(summary: str) -> Interval | None:
     return None
 
 
+def _from_components(
+    components: list[dict],
+) -> Compensation | None:
+    """Build Compensation from structured summaryComponents.
+
+    Picks the first Salary component for amount/currency/interval and
+    folds in Bonus/EquityPercentage flags. Returns None if no Salary
+    component with at least one bound is present.
+    """
+    salary: dict | None = None
+    equity = False
+    bonus = False
+    for c in components:
+        t = c.get("compensationType")
+        if t == "Salary" and salary is None:
+            salary = c
+        elif t == "Bonus":
+            bonus = True
+        elif t == "EquityPercentage":
+            equity = True
+
+    if salary is None:
+        return None
+    lo = salary.get("minValue")
+    hi = salary.get("maxValue")
+    if lo is None and hi is None:
+        return None
+    return Compensation(
+        min_amount=int(lo) if lo is not None else None,
+        max_amount=int(hi) if hi is not None else None,
+        currency=salary.get("currencyCode") or None,
+        interval=_COMPONENT_INTERVAL_MAP.get(
+            salary.get("interval", ""), None
+        ),
+        equity=equity,
+        bonus=bonus,
+    )
+
+
 def _build_compensation(comp: dict) -> Compensation | str | None:
+    # Prefer structured summaryComponents — handles non-USD currencies
+    # (EUR, GBP, PLN, etc.) that the summary-string regex can't parse.
+    if structured := _from_components(comp.get("summaryComponents") or []):
+        return structured
+
     summary = comp.get("compensationTierSummary") or ""
     if not summary:
         return None

@@ -3,8 +3,9 @@ import json
 import logging
 from collections.abc import AsyncIterator
 
+from job_scraper.comp_text import extract_from_text
 from job_scraper.hash import job_hash
-from job_scraper.models import Job
+from job_scraper.models import Compensation, Job
 from job_scraper.scraper.html import html_to_text
 from job_scraper.scraper.http import Http
 
@@ -181,7 +182,7 @@ def scrape_board(company: str, instance: str, site: str, *, name: str):
 
         async def fetch_detail(
             ext_path: str,
-        ) -> tuple[str, str | None, str | None]:
+        ) -> tuple[str, str | None, str | None, Compensation | None]:
             nonlocal done
             url = (
                 f"{base}/wday/cxs/{company}/{site}{ext_path}"
@@ -208,14 +209,15 @@ def scrape_board(company: str, instance: str, site: str, *, name: str):
                 location = (
                     "; ".join(locs) if locs else None
                 )
-                return desc, posted, location
+                comp = extract_from_text(desc)
+                return desc, posted, location, comp
             except Exception:
                 logger.warning(
                     "company=%s detail_error=true path=%s",
                     name,
                     ext_path,
                 )
-                return "", None, None
+                return "", None, None, None
             finally:
                 done += 1
                 if done % 200 == 0:
@@ -240,6 +242,7 @@ def scrape_board(company: str, instance: str, site: str, *, name: str):
             description,
             posted,
             detail_loc,
+            compensation,
         ) in zip(stubs, details, strict=True):
             post_url = f"{base}/{site}{ext_path}"
             h = job_hash(title, name, description)
@@ -250,7 +253,7 @@ def scrape_board(company: str, instance: str, site: str, *, name: str):
                 team=None,
                 url=post_url,
                 posted=posted,
-                compensation=None,
+                compensation=compensation,
                 location=detail_loc or listing_loc,
                 description=description,
                 source=f"workday:{company}",

@@ -196,6 +196,262 @@ def test_ashby_extended_formats(summary, expected):
     assert _ab_build({"compensationTierSummary": summary}) == expected
 
 
+def test_ashby_summary_components_preferred_over_regex():
+    """summaryComponents handle non-USD currencies the regex can't."""
+    comp = {
+        "compensationTierSummary": "PLN 16.4K \u2013 PLN 35.1K per month",
+        "summaryComponents": [{
+            "compensationType": "Salary",
+            "interval": "1 MONTH",
+            "currencyCode": "PLN",
+            "minValue": 16400,
+            "maxValue": 35100,
+        }],
+    }
+    assert _ab_build(comp) == Compensation(
+        16400, 35100, "PLN", "monthly",
+    )
+
+
+def test_ashby_summary_components_fold_bonus_and_equity():
+    comp = {
+        "compensationTierSummary": "$110K \u2013 $130K",
+        "summaryComponents": [
+            {
+                "compensationType": "Salary",
+                "interval": "1 YEAR",
+                "currencyCode": "USD",
+                "minValue": 110000,
+                "maxValue": 130000,
+            },
+            {
+                "compensationType": "Bonus",
+                "minValue": None,
+                "maxValue": None,
+                "interval": "1 YEAR",
+            },
+            {
+                "compensationType": "EquityPercentage",
+                "minValue": None,
+                "maxValue": None,
+                "interval": "NONE",
+            },
+        ],
+    }
+    assert _ab_build(comp) == Compensation(
+        110000, 130000, "USD", "annual",
+        equity=True, bonus=True,
+    )
+
+
+def test_ashby_components_without_salary_falls_back_to_summary():
+    comp = {
+        "compensationTierSummary": "$100K \u2013 $120K",
+        "summaryComponents": [{
+            "compensationType": "EquityPercentage",
+            "minValue": None,
+            "maxValue": None,
+            "interval": "NONE",
+        }],
+    }
+    assert _ab_build(comp) == Compensation(
+        100000, 120000, "USD", None,
+    )
+
+
+from job_scraper.scraper.rippling import _build_compensation as _rp_build
+
+
+@pytest.mark.parametrize("pay_ranges, expected", [
+    (
+        [{
+            "currency": "USD",
+            "frequency": "YEAR",
+            "rangeStart": 220000.0,
+            "rangeEnd": 265000.0,
+        }],
+        Compensation(220000, 265000, "USD", "annual"),
+    ),
+    (
+        [{
+            "currency": "USD",
+            "frequency": "HOUR",
+            "rangeStart": 45.0,
+            "rangeEnd": 60.0,
+        }],
+        Compensation(45, 60, "USD", "hourly"),
+    ),
+    (
+        [{
+            "currency": "EUR",
+            "frequency": "MONTH",
+            "rangeStart": 8000.0,
+            "rangeEnd": 10000.0,
+        }],
+        Compensation(8000, 10000, "EUR", "monthly"),
+    ),
+    # Unknown frequency → interval=None
+    (
+        [{
+            "currency": "USD",
+            "frequency": "FORTNIGHT",
+            "rangeStart": 1000.0,
+            "rangeEnd": 2000.0,
+        }],
+        Compensation(1000, 2000, "USD", None),
+    ),
+])
+def test_rippling_pay_range(pay_ranges, expected):
+    assert _rp_build(pay_ranges) == expected
+
+
+def test_rippling_empty_returns_none():
+    assert _rp_build([]) is None
+    assert _rp_build([{"rangeStart": None, "rangeEnd": None}]) is None
+
+
+def test_rippling_first_populated_wins():
+    pay_ranges = [
+        {"rangeStart": None, "rangeEnd": None},
+        {
+            "currency": "USD",
+            "frequency": "YEAR",
+            "rangeStart": 150000.0,
+            "rangeEnd": 200000.0,
+        },
+    ]
+    assert _rp_build(pay_ranges) == Compensation(
+        150000, 200000, "USD", "annual",
+    )
+
+
+from job_scraper.scraper.smartrecruiters import (
+    _build_compensation as _sr_build,
+)
+
+
+@pytest.mark.parametrize("comp, expected", [
+    (
+        {"min": 15000, "max": 15000, "currency": "USD",
+         "period": "MONTHLY"},
+        Compensation(15000, 15000, "USD", "monthly"),
+    ),
+    (
+        {"min": 120000, "max": 150000, "currency": "USD",
+         "period": "ANNUAL"},
+        Compensation(120000, 150000, "USD", "annual"),
+    ),
+    # Unknown period → None
+    (
+        {"min": 100, "max": 200, "currency": "USD", "period": "DAILY"},
+        Compensation(100, 200, "USD", None),
+    ),
+])
+def test_smartrecruiters_compensation(comp, expected):
+    assert _sr_build(comp) == expected
+
+
+@pytest.mark.parametrize("comp", [
+    None,
+    {},
+    # min=0 is SR's placeholder for unset; treat as no data.
+    {"min": 0, "currency": "USD", "period": "MONTHLY"},
+    {"min": 0, "max": 0, "currency": "USD", "period": "MONTHLY"},
+])
+def test_smartrecruiters_no_data_returns_none(comp):
+    assert _sr_build(comp) is None
+
+
+from job_scraper.comp_text import extract_from_text
+
+
+@pytest.mark.parametrize("text, expected", [
+    # Google's standard US pay-transparency line
+    (
+        "The US base salary range for this full-time position is "
+        "$174,000-$252,000 + bonus + equity + benefits.",
+        Compensation(174000, 252000, "USD", "annual"),
+    ),
+    # Workday (Cadence) state-specific phrasing
+    (
+        "The annual salary range for California is $101,500 to $188,500. "
+        "You may also be eligible to receive incentive compensation.",
+        Compensation(101500, 188500, "USD", "annual"),
+    ),
+    # Workday (NVIDIA-ish) position phrasing
+    (
+        "The base salary range for this position is $148,500 - $313,700.",
+        Compensation(148500, 313700, "USD", "annual"),
+    ),
+    # Phenom/Snowflake role phrasing
+    (
+        "The estimated base salary range for this role is "
+        "$160,000 - $230,000.",
+        Compensation(160000, 230000, "USD", "annual"),
+    ),
+    # Netflix market-range phrasing
+    (
+        "The range for this role is $255,000.00 - $400,000.00. "
+        "Netflix provides comprehensive benefits.",
+        Compensation(255000, 400000, "USD", "annual"),
+    ),
+    # iCIMS (Rivian) "for this role" phrasing
+    (
+        "The salary range for this role is $71,300 to $89,100.",
+        Compensation(71300, 89100, "USD", "annual"),
+    ),
+    # Microsoft Research with USD prefix
+    (
+        "The base pay range for this role across the U.S. is "
+        "USD $119,800 - $234,700 per year.",
+        Compensation(119800, 234700, "USD", "annual"),
+    ),
+    # K-notation
+    (
+        "Compensation: $150K - $250K",
+        Compensation(150000, 250000, "USD", "annual"),
+    ),
+    # Hourly explicit
+    (
+        "The hourly pay range for this role is $28 to $35 per hour.",
+        Compensation(28, 35, "USD", "hourly"),
+    ),
+    # Magnitude-based hourly inference (no marker)
+    (
+        "The pay range for this role is $43 - $50.",
+        Compensation(43, 50, "USD", "hourly"),
+    ),
+    # "Salary Range/Hourly Rate range" boilerplate (Rivian) — "hourly"
+    # keyword in window with annual amounts → annual.
+    (
+        "Salary Range/Hourly Rate range for California Based "
+        "Applicants: $171,100-$213,900",
+        Compensation(171100, 213900, "USD", "annual"),
+    ),
+    # "an hour" trumps an earlier "annual" in the same sentence
+    (
+        "The annual salary range for California is $39.71 to $73.75 "
+        "an hour.",
+        Compensation(39, 73, "USD", "hourly"),
+    ),
+])
+def test_extract_from_text(text, expected):
+    assert extract_from_text(text) == expected
+
+
+@pytest.mark.parametrize("text", [
+    "",
+    "We offer a competitive salary.",
+    "Our revenue grew from $10M to $50M last year.",
+    # Phrase present but no amounts
+    "We have a transparent salary range policy.",
+    # Backwards range (hi < lo) rejected
+    "salary range is $200,000 to $100,000",
+])
+def test_extract_from_text_negatives(text):
+    assert extract_from_text(text) is None
+
+
 def test_format_compensation_passes_through_raw_string():
     assert format_compensation("Competitive") == "Competitive"
     assert format_compensation("CA$121K \u2013 CA$166K") == "CA$121K \u2013 CA$166K"

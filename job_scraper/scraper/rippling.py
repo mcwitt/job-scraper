@@ -4,11 +4,33 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 
 from job_scraper.hash import job_hash
-from job_scraper.models import Job
+from job_scraper.models import Compensation, Interval, Job
 from job_scraper.scraper.html import html_to_text
 from job_scraper.scraper.http import Http
 
 API = "https://api.rippling.com/platform/api/ats/v1/board"
+
+_FREQUENCY_MAP: dict[str, Interval] = {
+    "YEAR": "annual",
+    "MONTH": "monthly",
+    "WEEK": "weekly",
+    "HOUR": "hourly",
+}
+
+
+def _build_compensation(pay_ranges: list[dict]) -> Compensation | None:
+    for r in pay_ranges:
+        lo = r.get("rangeStart")
+        hi = r.get("rangeEnd")
+        if lo is None and hi is None:
+            continue
+        return Compensation(
+            min_amount=int(lo) if lo is not None else None,
+            max_amount=int(hi) if hi is not None else None,
+            currency=r.get("currency") or None,
+            interval=_FREQUENCY_MAP.get(r.get("frequency", ""), None),
+        )
+    return None
 
 
 def scrape_board(slug: str, *, name: str):
@@ -48,6 +70,10 @@ def scrape_board(slug: str, *, name: str):
 
             post_url = detail.get("url", "")
 
+            compensation = _build_compensation(
+                detail.get("payRangeDetails") or []
+            )
+
             created = detail.get("createdOn")
             posted = None
             if created:
@@ -67,7 +93,7 @@ def scrape_board(slug: str, *, name: str):
                 team=team,
                 url=post_url,
                 posted=posted,
-                compensation=None,
+                compensation=compensation,
                 location=location,
                 description=description,
                 source=f"rippling:{slug}",

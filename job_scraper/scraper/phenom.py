@@ -2,6 +2,7 @@ import asyncio
 import json
 from collections.abc import AsyncIterator
 
+from job_scraper.comp_text import extract_from_text
 from job_scraper.hash import job_hash
 from job_scraper.models import Job
 from job_scraper.scraper.html import html_to_text
@@ -97,7 +98,7 @@ def scrape_board(domain: str, *, name: str):
                 team=team,
                 url=post_url,
                 posted=posted,
-                compensation=None,
+                compensation=extract_from_text(description),
                 location=location,
                 description=description,
                 source=f"phenom:{domain}",
