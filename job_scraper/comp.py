@@ -25,7 +25,9 @@ _INTERVAL_SUFFIX: dict[Interval, str] = {
 }
 
 
-def format_compensation(c: Compensation) -> str:
+def format_compensation(c: Compensation | str) -> str:
+    if isinstance(c, str):
+        return c
     prefix = _prefix(c.currency)
     suffix = _INTERVAL_SUFFIX[c.interval] if c.interval else ""
 

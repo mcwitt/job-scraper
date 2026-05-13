@@ -2,9 +2,10 @@
 
 import dataclasses
 
+import dacite
 import pytest
 
-from job_scraper.models import Compensation
+from job_scraper.models import Compensation, Job, to_dict
 
 
 def test_compensation_is_frozen():
@@ -160,7 +161,72 @@ def test_ashby_summary(summary, expected):
     assert _ab_build({"compensationTierSummary": summary}) == expected
 
 
-def test_ashby_unparseable_returns_none():
-    assert _ab_build({"compensationTierSummary": "Competitive"}) is None
+def test_ashby_unparseable_falls_back_to_raw_string():
+    assert _ab_build({"compensationTierSummary": "Competitive"}) == "Competitive"
+    assert _ab_build(
+        {"compensationTierSummary": "CA$121.5K \u2013 CA$166.6K"}
+    ) == "CA$121.5K \u2013 CA$166.6K"
+
+
+def test_ashby_empty_summary_returns_none():
     assert _ab_build({"compensationTierSummary": ""}) is None
     assert _ab_build({}) is None
+
+
+@pytest.mark.parametrize("summary, expected", [
+    # Decimals with K
+    ("$234.4K \u2013 $385K • Offers Equity",
+     Compensation(234400, 385000, "USD", None, equity=True)),
+    ("$162.4K \u2013 $225K",
+     Compensation(162400, 225000, "USD", None)),
+    # Single value with K
+    ("$380K • Offers Equity",
+     Compensation(380000, None, "USD", None, equity=True)),
+    # Hourly with decimals (no K)
+    ("$60.58 \u2013 $67.31 per hour • Offers Equity",
+     Compensation(60, 67, "USD", "hourly", equity=True)),
+    # Monthly single value
+    ("$11.7K per month",
+     Compensation(11700, None, "USD", "monthly")),
+    # Annual marker
+    ("$120K \u2013 $150K per year",
+     Compensation(120000, 150000, "USD", "annual")),
+])
+def test_ashby_extended_formats(summary, expected):
+    assert _ab_build({"compensationTierSummary": summary}) == expected
+
+
+def test_format_compensation_passes_through_raw_string():
+    assert format_compensation("Competitive") == "Competitive"
+    assert format_compensation("CA$121K \u2013 CA$166K") == "CA$121K \u2013 CA$166K"
+
+
+def test_job_round_trip_with_raw_string_compensation():
+    job = Job(
+        hash="h",
+        title="t",
+        company="c",
+        url="u",
+        description="d",
+        source="ashby:x",
+        compensation="Competitive",
+    )
+    d = to_dict(job)
+    restored = dacite.from_dict(Job, d)
+    assert restored.compensation == "Competitive"
+
+
+def test_job_round_trip_with_structured_compensation():
+    comp = Compensation(100000, 150000, "USD", "annual", equity=True)
+    job = Job(
+        hash="h",
+        title="t",
+        company="c",
+        url="u",
+        description="d",
+        source="lever:x",
+        compensation=comp,
+    )
+    d = to_dict(job)
+    restored = dacite.from_dict(Job, d)
+    assert restored.compensation == comp

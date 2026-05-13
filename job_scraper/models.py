@@ -25,7 +25,7 @@ class Job:
     last_seen_at: str = ""
     team: str | None = None
     posted: str | None = None
-    compensation: Compensation | None = None
+    compensation: Compensation | str | None = None
     location: str | None = None
 
 
@@ -74,7 +74,7 @@ class ScoredJob:
     last_seen_at: str = ""
     team: str | None = None
     posted: str | None = None
-    compensation: Compensation | None = None
+    compensation: Compensation | str | None = None
     location: str | None = None
 
 
