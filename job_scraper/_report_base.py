@@ -285,7 +285,8 @@ function initSearch(afterFilter) {
       var s = '';
       cell.childNodes.forEach(function(n) {
         if (n.nodeType === 3) s += n.data;
-        else if (n.tagName === 'A')
+        else if (n.nodeType === 1
+          && !n.classList.contains('tip-body'))
           s += n.textContent;
       });
       return s;
